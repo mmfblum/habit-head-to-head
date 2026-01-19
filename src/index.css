@@ -2,95 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Fantasy Productivity - Sports-Inspired Design System */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
+    /* Dark sports theme - primary palette */
+    --background: 222 47% 6%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 222 47% 9%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 222 47% 9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* Electric green for wins/success */
+    --primary: 142 76% 46%;
+    --primary-foreground: 222 47% 6%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    /* Muted purple-blue for secondary */
+    --secondary: 243 75% 59%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 222 30% 15%;
+    --muted-foreground: 215 20% 55%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Accent - vibrant cyan */
+    --accent: 186 100% 50%;
+    --accent-foreground: 222 47% 6%;
 
-    --destructive: 0 62.8% 30.6%;
+    /* Status colors */
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --win: 142 76% 46%;
+    --loss: 0 84% 60%;
+    --pending: 45 93% 58%;
+    --streak: 32 95% 55%;
+
+    --border: 222 30% 18%;
+    --input: 222 30% 18%;
+    --ring: 142 76% 46%;
+
+    --radius: 0.75rem;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(142 76% 46%) 0%, hsl(186 100% 50%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(222 47% 11%) 0%, hsl(222 47% 8%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(243 75% 59%) 0%, hsl(280 80% 55%) 50%, hsl(320 80% 55%) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(45 93% 58%) 0%, hsl(32 95% 55%) 100%);
+    --gradient-score: linear-gradient(90deg, hsl(142 76% 46% / 0.2) 0%, hsl(142 76% 46% / 0) 100%);
+
+    /* Shadows */
+    --shadow-glow: 0 0 30px hsl(142 76% 46% / 0.3);
+    --shadow-card: 0 4px 24px hsl(222 47% 3% / 0.5);
+    --shadow-elevated: 0 8px 40px hsl(222 47% 3% / 0.7);
+
+    /* Sidebar - keeping for compatibility */
+    --sidebar-background: 222 47% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 142 76% 46%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 30% 15%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 30% 18%;
+    --sidebar-ring: 142 76% 46%;
+  }
+
+  /* Light mode - keeping for compatibility but app is dark-first */
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 243 75% 59%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 186 100% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 142 76% 36%;
   }
 }
 
@@ -100,6 +101,154 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .score-text {
+    @apply font-bold tracking-tight;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+
+  .gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-text-gold {
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .card-elevated {
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .glow-primary {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .matchup-card {
+    @apply relative overflow-hidden rounded-2xl p-4;
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .stat-badge {
+    @apply inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .win-badge {
+    @apply stat-badge bg-win/20 text-win;
+  }
+
+  .loss-badge {
+    @apply stat-badge bg-loss/20 text-loss;
+  }
+
+  .streak-badge {
+    @apply stat-badge;
+    background: linear-gradient(135deg, hsl(var(--streak) / 0.2) 0%, hsl(var(--pending) / 0.2) 100%);
+    color: hsl(var(--streak));
+  }
+
+  .progress-bar-container {
+    @apply h-2 rounded-full bg-muted overflow-hidden;
+  }
+
+  .progress-bar-fill {
+    @apply h-full rounded-full transition-all duration-500 ease-out;
+    background: var(--gradient-primary);
+  }
+
+  .nav-item {
+    @apply flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-200;
+  }
+
+  .nav-item-active {
+    @apply bg-primary/10 text-primary;
+  }
+
+  .nav-item-inactive {
+    @apply text-muted-foreground hover:text-foreground hover:bg-muted/50;
+  }
+
+  .task-card {
+    @apply relative rounded-xl p-4 transition-all duration-200;
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .task-card:active {
+    transform: scale(0.98);
+  }
+
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px hsl(142 76% 46% / 0.3);
+    }
+    50% {
+      box-shadow: 0 0 40px hsl(142 76% 46% / 0.5);
+    }
+  }
+
+  .slide-up {
+    animation: slide-up 0.4s ease-out;
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .score-counter {
+    animation: score-pop 0.3s ease-out;
+  }
+
+  @keyframes score-pop {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.1);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 16px);
   }
 }
