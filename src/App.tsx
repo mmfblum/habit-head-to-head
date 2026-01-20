@@ -37,13 +37,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function LeagueGate({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  const { data: leagues, isLoading } = useUserLeagues();
+  const { data: leagues, isLoading, isError, refetch } = useUserLeagues();
   
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+  
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <p className="text-muted-foreground">Couldn't load your leagues</p>
+        <button 
+          onClick={() => refetch()}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
+        >
+          Retry
+        </button>
       </div>
     );
   }
