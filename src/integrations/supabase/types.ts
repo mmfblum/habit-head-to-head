@@ -687,6 +687,7 @@ export type Database = {
       }
       task_templates: {
         Row: {
+          allowed_data_sources: string[]
           category: Database["public"]["Enums"]["task_category"]
           created_at: string
           default_config: Json
@@ -700,11 +701,13 @@ export type Database = {
           min_value: number | null
           name: string
           scoring_type: Database["public"]["Enums"]["scoring_type"]
+          supports_integration: boolean
           unit: Database["public"]["Enums"]["unit_type"]
           updated_at: string
           version: number
         }
         Insert: {
+          allowed_data_sources?: string[]
           category?: Database["public"]["Enums"]["task_category"]
           created_at?: string
           default_config?: Json
@@ -718,11 +721,13 @@ export type Database = {
           min_value?: number | null
           name: string
           scoring_type: Database["public"]["Enums"]["scoring_type"]
+          supports_integration?: boolean
           unit: Database["public"]["Enums"]["unit_type"]
           updated_at?: string
           version?: number
         }
         Update: {
+          allowed_data_sources?: string[]
           category?: Database["public"]["Enums"]["task_category"]
           created_at?: string
           default_config?: Json
@@ -736,6 +741,7 @@ export type Database = {
           min_value?: number | null
           name?: string
           scoring_type?: Database["public"]["Enums"]["scoring_type"]
+          supports_integration?: boolean
           unit?: Database["public"]["Enums"]["unit_type"]
           updated_at?: string
           version?: number
