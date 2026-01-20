@@ -268,6 +268,64 @@ export type Database = {
           },
         ]
       }
+      powerups: {
+        Row: {
+          created_at: string
+          id: string
+          is_used: boolean
+          modifier_value: number
+          powerup_type: string
+          task_instance_id: string | null
+          used_at: string | null
+          user_id: string
+          week_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_used?: boolean
+          modifier_value?: number
+          powerup_type: string
+          task_instance_id?: string | null
+          used_at?: string | null
+          user_id: string
+          week_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_used?: boolean
+          modifier_value?: number
+          powerup_type?: string
+          task_instance_id?: string | null
+          used_at?: string | null
+          user_id?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "powerups_task_instance_id_fkey"
+            columns: ["task_instance_id"]
+            isOneToOne: false
+            referencedRelation: "task_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "powerups_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "powerups_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -295,6 +353,61 @@ export type Database = {
         }
         Relationships: []
       }
+      punishments: {
+        Row: {
+          badge_name: string | null
+          created_at: string
+          id: string
+          league_id: string
+          metadata: Json | null
+          punishment_type: string
+          user_id: string
+          week_id: string
+        }
+        Insert: {
+          badge_name?: string | null
+          created_at?: string
+          id?: string
+          league_id: string
+          metadata?: Json | null
+          punishment_type?: string
+          user_id: string
+          week_id: string
+        }
+        Update: {
+          badge_name?: string | null
+          created_at?: string
+          id?: string
+          league_id?: string
+          metadata?: Json | null
+          punishment_type?: string
+          user_id?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "punishments_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "punishments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "punishments_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scoring_events: {
         Row: {
           config_snapshot: Json
@@ -302,11 +415,18 @@ export type Database = {
           daily_checkin_id: string
           derived_values: Json | null
           id: string
+          is_reversed: boolean | null
+          league_id: string | null
           points_awarded: number
           points_before_cap: number
+          powerup_applied: Json | null
           raw_value: number
           rule_applied: string
           scoring_type: Database["public"]["Enums"]["scoring_type"]
+          season_id: string | null
+          task_instance_id: string | null
+          user_id: string | null
+          week_id: string | null
         }
         Insert: {
           config_snapshot: Json
@@ -314,11 +434,18 @@ export type Database = {
           daily_checkin_id: string
           derived_values?: Json | null
           id?: string
+          is_reversed?: boolean | null
+          league_id?: string | null
           points_awarded: number
           points_before_cap: number
+          powerup_applied?: Json | null
           raw_value: number
           rule_applied: string
           scoring_type: Database["public"]["Enums"]["scoring_type"]
+          season_id?: string | null
+          task_instance_id?: string | null
+          user_id?: string | null
+          week_id?: string | null
         }
         Update: {
           config_snapshot?: Json
@@ -326,11 +453,18 @@ export type Database = {
           daily_checkin_id?: string
           derived_values?: Json | null
           id?: string
+          is_reversed?: boolean | null
+          league_id?: string | null
           points_awarded?: number
           points_before_cap?: number
+          powerup_applied?: Json | null
           raw_value?: number
           rule_applied?: string
           scoring_type?: Database["public"]["Enums"]["scoring_type"]
+          season_id?: string | null
+          task_instance_id?: string | null
+          user_id?: string | null
+          week_id?: string | null
         }
         Relationships: [
           {
@@ -338,6 +472,41 @@ export type Database = {
             columns: ["daily_checkin_id"]
             isOneToOne: false
             referencedRelation: "daily_checkins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scoring_events_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scoring_events_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scoring_events_task_instance_id_fkey"
+            columns: ["task_instance_id"]
+            isOneToOne: false
+            referencedRelation: "task_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scoring_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scoring_events_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
             referencedColumns: ["id"]
           },
         ]
@@ -737,6 +906,60 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_powerups: {
+        Args: {
+          _base_points: number
+          _is_binary_missed?: boolean
+          _task_instance_id: string
+          _user_id: string
+          _week_id: string
+        }
+        Returns: {
+          final_points: number
+          powerup_applied: Json
+        }[]
+      }
+      assign_weekly_punishments: { Args: { _week_id: string }; Returns: number }
+      calc_score_binary_yesno: {
+        Args: { _boolean_value: boolean; _config: Json }
+        Returns: number
+      }
+      calc_score_diminishing: {
+        Args: { _config: Json; _numeric_value: number }
+        Returns: number
+      }
+      calc_score_linear_per_unit: {
+        Args: { _config: Json; _numeric_value: number }
+        Returns: Record<string, unknown>
+      }
+      calc_score_threshold: {
+        Args: { _config: Json; _numeric_value: number }
+        Returns: number
+      }
+      calc_score_tiered: {
+        Args: { _config: Json; _numeric_value: number }
+        Returns: number
+      }
+      calc_score_time_after: {
+        Args: { _config: Json; _time_value: string }
+        Returns: number
+      }
+      calc_score_time_before: {
+        Args: { _config: Json; _time_value: string }
+        Returns: number
+      }
+      calculate_checkin_score: {
+        Args: {
+          _checkin: Record<string, unknown>
+          _task_instance: Record<string, unknown>
+        }
+        Returns: {
+          derived_values: Json
+          points_awarded: number
+          points_before_cap: number
+          rule_applied: string
+        }[]
+      }
       can_access_checkin: {
         Args: { _task_instance_id: string; _user_id: string }
         Returns: boolean
@@ -749,6 +972,10 @@ export type Database = {
         Args: { _user_id: string; _week_id: string }
         Returns: boolean
       }
+      get_week_for_date: {
+        Args: { _date: string; _season_id: string }
+        Returns: string
+      }
       is_league_admin: {
         Args: { _league_id: string; _user_id: string }
         Returns: boolean
@@ -760,6 +987,14 @@ export type Database = {
       is_season_member: {
         Args: { _season_id: string; _user_id: string }
         Returns: boolean
+      }
+      update_season_standing: {
+        Args: { _season_id: string; _user_id: string }
+        Returns: undefined
+      }
+      update_weekly_score: {
+        Args: { _user_id: string; _week_id: string }
+        Returns: undefined
       }
     }
     Enums: {
