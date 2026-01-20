@@ -981,6 +981,10 @@ export type Database = {
         Args: { _user_id: string; _week_id: string }
         Returns: boolean
       }
+      generate_task_instances_for_user: {
+        Args: { _season_id: string; _user_id: string }
+        Returns: undefined
+      }
       get_week_for_date: {
         Args: { _date: string; _season_id: string }
         Returns: string
