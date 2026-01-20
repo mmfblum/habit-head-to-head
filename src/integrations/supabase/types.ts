@@ -989,6 +989,13 @@ export type Database = {
         Args: { _date: string; _season_id: string }
         Returns: string
       }
+      is_checkin_verified: {
+        Args: {
+          _checkin: Record<string, unknown>
+          _task_instance: Record<string, unknown>
+        }
+        Returns: boolean
+      }
       is_league_admin: {
         Args: { _league_id: string; _user_id: string }
         Returns: boolean

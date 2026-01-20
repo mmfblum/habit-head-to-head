@@ -21,6 +21,7 @@ export interface CheckinValue {
   numeric_value?: number;
   time_value?: string;
   duration_minutes?: number;
+  metadata?: Record<string, unknown> | null;
 }
 
 // Icon mapping for task templates
@@ -36,4 +37,6 @@ export const TASK_ICONS: Record<string, string> = {
   moon: '🌙',
   sun: '☀️',
   activity: '📊',
+  droplet: '💧',
+  timer: '⏱️',
 };
