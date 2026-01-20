@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Filter, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Calendar, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DailyCheckinList } from '@/components/checkin';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
@@ -167,7 +168,15 @@ export default function Tasks() {
             <p className="text-muted-foreground mb-4">
               Join or create a league to start tracking your daily tasks.
             </p>
-            <Button>Join a League</Button>
+            <div className="flex flex-col gap-3 items-center">
+              <Button>Join a League</Button>
+              <Link to="/checkin-demo">
+                <Button variant="outline" className="gap-2">
+                  <Eye className="w-4 h-4" />
+                  Preview Check-in UI
+                </Button>
+              </Link>
+            </div>
           </div>
         ) : (
           <DailyCheckinList 
