@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useCreateLeague, useCreateSeason, useConfigureSeasonTasks } from '@/hooks/useLeagues';
 import { useTaskTemplatesByCategory, TaskTemplate } from '@/hooks/useTaskTemplates';
 import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
+import { TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
 
 type WizardStep = 'details' | 'tasks' | 'invite';
 
@@ -28,7 +29,8 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     description: '',
     weeksCount: 4,
   });
-  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+  // Map of taskId -> config overrides
+  const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
   const [createdLeague, setCreatedLeague] = useState<{ id: string; invite_code: string | null } | null>(null);
   const [createdSeason, setCreatedSeason] = useState<{ id: string } | null>(null);
 
@@ -64,8 +66,28 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const handleToggleTask = (taskId: string, template: TaskTemplate) => {
+    setTaskConfigs((prev) => {
+      const newMap = new Map(prev);
+      if (newMap.has(taskId)) {
+        newMap.delete(taskId);
+      } else {
+        newMap.set(taskId, getInitialConfig(template));
+      }
+      return newMap;
+    });
+  };
+
+  const handleUpdateConfig = (taskId: string, config: TaskConfigOverrides) => {
+    setTaskConfigs((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(taskId, config);
+      return newMap;
+    });
+  };
+
   const handleTasksSubmit = async () => {
-    if (selectedTasks.length < 3) {
+    if (taskConfigs.size < 3) {
       toast.error('Please select at least 3 tasks');
       return;
     }
@@ -73,12 +95,22 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     if (!createdSeason) return;
 
     try {
+      const taskConfigArray = Array.from(taskConfigs.entries()).map(([taskId, config], index) => ({
+        task_template_id: taskId,
+        display_order: index,
+        config_overrides: {
+          scoring_mode: config.scoring_mode,
+          ...(config.target_time && { target_time: config.target_time }),
+          ...(config.threshold && { threshold: config.threshold }),
+          ...(config.target && { target: config.target }),
+          ...(config.points && { points: config.points }),
+          ...(config.binary_points && { binary_points: config.binary_points }),
+        },
+      }));
+
       await configureTasks.mutateAsync({
         seasonId: createdSeason.id,
-        taskConfigs: selectedTasks.map((taskId, index) => ({
-          task_template_id: taskId,
-          display_order: index,
-        })),
+        taskConfigs: taskConfigArray,
       });
 
       setStep('invite');
@@ -252,9 +284,9 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
               >
                 <div className="text-center mb-6">
                   <Zap className="w-12 h-12 text-secondary mx-auto mb-3" />
-                  <h3 className="text-xl font-display font-bold">Select Tasks</h3>
+                  <h3 className="text-xl font-display font-bold">Select & Configure Tasks</h3>
                   <p className="text-muted-foreground">
-                    Choose which tasks members will compete on ({selectedTasks.length} selected)
+                    Choose tasks and customize targets for your league ({taskConfigs.size} selected)
                   </p>
                 </div>
 
@@ -263,14 +295,9 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 ) : (
                   <TaskSelectionGrid
                     groupedTemplates={groupedTemplates || {}}
-                    selectedTasks={selectedTasks}
-                    onToggleTask={(taskId) => {
-                      setSelectedTasks((prev) =>
-                        prev.includes(taskId)
-                          ? prev.filter((id) => id !== taskId)
-                          : [...prev, taskId]
-                      );
-                    }}
+                    selectedTasks={taskConfigs}
+                    onToggleTask={handleToggleTask}
+                    onUpdateConfig={handleUpdateConfig}
                   />
                 )}
 
@@ -279,9 +306,9 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     onClick={handleTasksSubmit}
                     className="w-full"
                     size="lg"
-                    disabled={selectedTasks.length < 3 || configureTasks.isPending}
+                    disabled={taskConfigs.size < 3 || configureTasks.isPending}
                   >
-                    {configureTasks.isPending ? 'Saving...' : `Continue with ${selectedTasks.length} tasks`}
+                    {configureTasks.isPending ? 'Saving...' : `Continue with ${taskConfigs.size} tasks`}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
