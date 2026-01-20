@@ -2,5 +2,8 @@ export { BinaryCheckinInput } from './BinaryCheckinInput';
 export { NumericCheckinInput } from './NumericCheckinInput';
 export { TimeCheckinInput } from './TimeCheckinInput';
 export { DurationCheckinInput } from './DurationCheckinInput';
+export { TimerCheckinInput } from './TimerCheckinInput';
+export { ConfirmationButton } from './ConfirmationButton';
+export { VerificationBadge } from './VerificationBadge';
 export { CheckinCard } from './CheckinCard';
 export { DailyCheckinList } from './DailyCheckinList';
