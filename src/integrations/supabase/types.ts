@@ -107,7 +107,7 @@ export type Database = {
           {
             foreignKeyName: "league_members_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },

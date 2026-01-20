@@ -166,6 +166,17 @@ export function useJoinLeague() {
     mutationFn: async (inviteCode: string) => {
       if (!user) throw new Error('Must be logged in');
 
+      // Check if user is already in a league (single-league enforcement)
+      const { data: existingMembership } = await supabase
+        .from('league_members')
+        .select('id, leagues(name)')
+        .eq('user_id', user.id)
+        .single();
+
+      if (existingMembership) {
+        throw new Error('You are already in a league. Leave your current league first to join another.');
+      }
+
       // Find league by invite code
       const { data: leagues, error: findError } = await supabase
         .from('leagues')
@@ -176,16 +187,6 @@ export function useJoinLeague() {
       if (!leagues || leagues.length === 0) throw new Error('Invalid invite code');
 
       const league = leagues[0];
-
-      // Check if already a member
-      const { data: existing } = await supabase
-        .from('league_members')
-        .select('id')
-        .eq('league_id', league.id)
-        .eq('user_id', user.id)
-        .single();
-
-      if (existing) throw new Error('You are already a member of this league');
 
       // Check member count
       const { count } = await supabase
@@ -206,7 +207,13 @@ export function useJoinLeague() {
           role: 'member',
         });
 
-      if (joinError) throw joinError;
+      if (joinError) {
+        // Handle unique constraint violation
+        if (joinError.code === '23505') {
+          throw new Error('You are already in a league');
+        }
+        throw joinError;
+      }
 
       return league;
     },
