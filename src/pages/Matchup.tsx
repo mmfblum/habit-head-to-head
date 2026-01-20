@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion';
-import { MessageCircle, TrendingUp, Zap, Activity, ListChecks } from 'lucide-react';
+import { MessageCircle, TrendingUp, Activity, ListChecks } from 'lucide-react';
 import { MatchupScoreboard } from '@/components/matchup/MatchupScoreboard';
 import { ActivityFeed } from '@/components/matchup/ActivityFeed';
 import { TaskBreakdown } from '@/components/matchup/TaskBreakdown';
+import { PowerUpButton } from '@/components/matchup/PowerUpSelector';
 import { useMatchupActivity, useMatchupScores } from '@/hooks/useMatchupActivity';
 import { useTaskBreakdown } from '@/hooks/useTaskBreakdown';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
@@ -145,13 +146,7 @@ export default function Matchup() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3">
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            className="p-4 rounded-xl bg-secondary/20 border border-secondary/30 flex items-center justify-center gap-2"
-          >
-            <Zap className="w-5 h-5 text-secondary" />
-            <span className="font-semibold text-sm">Use Power-Up</span>
-          </motion.button>
+          <PowerUpButton weekId={currentWeek.id} />
           <motion.button
             whileTap={{ scale: 0.98 }}
             className="p-4 rounded-xl bg-muted flex items-center justify-center gap-2"
