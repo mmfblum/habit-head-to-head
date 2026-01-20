@@ -3,28 +3,29 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
-import { Plus, ChevronLeft, ChevronRight, Calendar, Eye } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Calendar, Eye, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DailyCheckinList } from '@/components/checkin';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
-import { useUserLeagues } from '@/hooks/useLeagues';
-import { useAuth } from '@/hooks/useAuth';
+import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
+import { useStartSeason } from '@/hooks/useSeasonActions';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 
 export default function Tasks() {
-  const { user } = useAuth();
-  const { data: leaguesData, isLoading: leaguesLoading } = useUserLeagues();
+  const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const startSeason = useStartSeason();
   
-  // Get the first league's active season for now
-  // In a full app, you'd let users select their league/season
-  // Extract leagues from the joined data structure
-  const leagues = leaguesData?.map(lm => lm.leagues).filter(Boolean);
-  const currentLeague = leagues?.[0];
-  const currentSeasonId = undefined; // Would come from league's active season - for now undefined to show demo
+  // Get the current season from the league details
+  const currentSeasonId = leagueDetails?.current_season?.id;
+  const seasonStatus = leagueDetails?.current_season?.status;
+  const isSeasonDraft = seasonStatus === 'draft';
+  const isLeagueOwner = leagueDetails?.created_by === leagueDetails?.members?.find(
+    m => m.role === 'owner'
+  )?.user_id;
   
   const { data: tasks = [], isLoading: tasksLoading } = useTasksWithCheckins(
     currentSeasonId,
@@ -76,8 +77,15 @@ export default function Tasks() {
     ? tasks.filter(t => t.template?.category?.toLowerCase() === activeCategory.toLowerCase())
     : tasks;
 
-  // Show demo content if no season is active
+  // Show demo content if no season is active or season is in draft
   const showDemo = !currentSeasonId;
+  const showStartSeason = isSeasonDraft && currentSeasonId;
+
+  const handleStartSeason = async () => {
+    if (currentSeasonId) {
+      await startSeason.mutateAsync(currentSeasonId);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -161,7 +169,23 @@ export default function Tasks() {
         </div>
 
         {/* Task List */}
-        {showDemo ? (
+        {showStartSeason ? (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">🚀</div>
+            <h2 className="text-xl font-display font-bold mb-2">Ready to Start!</h2>
+            <p className="text-muted-foreground mb-6">
+              Your season is configured and ready. Start it to begin tracking tasks.
+            </p>
+            <Button 
+              onClick={handleStartSeason} 
+              disabled={startSeason.isPending}
+              className="gap-2"
+            >
+              <Play className="w-4 h-4" />
+              {startSeason.isPending ? 'Starting...' : 'Start Season'}
+            </Button>
+          </div>
+        ) : showDemo ? (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">📋</div>
             <h2 className="text-xl font-display font-bold mb-2">No Active Season</h2>
@@ -181,7 +205,7 @@ export default function Tasks() {
         ) : (
           <DailyCheckinList 
             tasks={filteredTasks} 
-            isLoading={tasksLoading || leaguesLoading} 
+            isLoading={tasksLoading || leagueLoading} 
           />
         )}
 
