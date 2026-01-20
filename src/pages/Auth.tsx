@@ -7,24 +7,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Trophy, Zap, Users, ArrowLeft } from 'lucide-react';
+import { Trophy, Zap, Users, ArrowLeft, Mail, CheckCircle2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
-type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
+type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset' | 'verify-email' | 'verified';
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState<AuthMode>('signin');
-  const { signIn, signUp, resetPassword, updatePassword, session } = useAuth();
+  const [pendingEmail, setPendingEmail] = useState<string>('');
+  const { signIn, signUp, resetPassword, updatePassword, resendConfirmationEmail, session, user } = useAuth();
   const navigate = useNavigate();
 
-  // Check for password reset mode from URL
+  // Check URL parameters for different modes
   useEffect(() => {
     if (searchParams.get('mode') === 'reset' && session) {
       setMode('reset');
+    } else if (searchParams.get('verified') === 'true') {
+      setMode('verified');
+      // If user is now verified and logged in, redirect after a moment
+      if (user?.email_confirmed_at) {
+        setTimeout(() => navigate('/'), 2000);
+      }
     }
-  }, [searchParams, session]);
+  }, [searchParams, session, user, navigate]);
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -37,7 +44,13 @@ export default function Auth() {
     setIsLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      if (error.message.includes('Email not confirmed')) {
+        setPendingEmail(email);
+        setMode('verify-email');
+        toast.error('Please verify your email before signing in');
+      } else {
+        toast.error(error.message);
+      }
     } else {
       toast.success('Welcome back!');
       navigate('/');
@@ -58,7 +71,7 @@ export default function Auth() {
       return;
     }
 
-    const { error } = await signUp(email, password, displayName);
+    const { error, needsEmailConfirmation } = await signUp(email, password, displayName);
     setIsLoading(false);
 
     if (error) {
@@ -67,6 +80,10 @@ export default function Auth() {
       } else {
         toast.error(error.message);
       }
+    } else if (needsEmailConfirmation) {
+      setPendingEmail(email);
+      setMode('verify-email');
+      toast.success('Check your email to verify your account!');
     } else {
       toast.success('Account created! Welcome to the league!');
       navigate('/');
@@ -119,6 +136,146 @@ export default function Auth() {
       navigate('/');
     }
   };
+
+  const handleResendEmail = async () => {
+    if (!pendingEmail) {
+      toast.error('No email address to resend to');
+      return;
+    }
+
+    setIsLoading(true);
+    const { error } = await resendConfirmationEmail(pendingEmail);
+    setIsLoading(false);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Verification email sent! Check your inbox.');
+    }
+  };
+
+  // Email verified success screen
+  if (mode === 'verified') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 pb-24">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', delay: 0.2 }}
+            className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-6"
+          >
+            <CheckCircle2 className="w-10 h-10 text-primary" />
+          </motion.div>
+          
+          <h1 className="text-2xl font-display font-bold mb-2">Email Verified!</h1>
+          <p className="text-muted-foreground mb-6">
+            Your account is now active. Redirecting you...
+          </p>
+          
+          <Button onClick={() => navigate('/')} className="w-full max-w-xs">
+            Continue to App
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Email verification pending screen
+  if (mode === 'verify-email') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 pb-24">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Trophy className="w-10 h-10 text-primary" />
+            <h1 className="text-3xl font-display font-bold gradient-text">ProGrind</h1>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className="w-full max-w-md"
+        >
+          <Card className="border-border/50 shadow-elevated">
+            <CardHeader className="text-center">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', delay: 0.3 }}
+                className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4"
+              >
+                <Mail className="w-8 h-8 text-primary" />
+              </motion.div>
+              <CardTitle className="font-display">Check Your Email</CardTitle>
+              <CardDescription className="text-base">
+                We've sent a verification link to
+              </CardDescription>
+              {pendingEmail && (
+                <p className="font-medium text-foreground mt-1">{pendingEmail}</p>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Click the link in your email to verify your account and start competing with friends.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  The link will expire in 24 hours.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleResendEmail}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Resend Verification Email
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => {
+                    setMode('signin');
+                    setPendingEmail('');
+                  }}
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Sign In
+                </Button>
+              </div>
+
+              <p className="text-xs text-center text-muted-foreground">
+                Didn't receive the email? Check your spam folder or try resending.
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
 
   // Password reset form (when user clicks email link)
   if (mode === 'reset') {
