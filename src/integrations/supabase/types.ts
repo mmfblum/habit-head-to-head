@@ -14,7 +14,153 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      custom_tasks: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          is_approved: boolean
+          league_id: string | null
+          max_points: number
+          name: string
+          points_per_unit: number
+          target: number
+          task_type: Database["public"]["Enums"]["task_type"]
+          unit: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_approved?: boolean
+          league_id?: string | null
+          max_points?: number
+          name: string
+          points_per_unit?: number
+          target?: number
+          task_type: Database["public"]["Enums"]["task_type"]
+          unit?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_approved?: boolean
+          league_id?: string | null
+          max_points?: number
+          name?: string
+          points_per_unit?: number
+          target?: number
+          task_type?: Database["public"]["Enums"]["task_type"]
+          unit?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      task_completions: {
+        Row: {
+          completion_date: string
+          created_at: string
+          custom_task_id: string | null
+          id: string
+          points_earned: number
+          task_template_id: string | null
+          updated_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          completion_date?: string
+          created_at?: string
+          custom_task_id?: string | null
+          id?: string
+          points_earned?: number
+          task_template_id?: string | null
+          updated_at?: string
+          user_id: string
+          value?: number
+        }
+        Update: {
+          completion_date?: string
+          created_at?: string
+          custom_task_id?: string | null
+          id?: string
+          points_earned?: number
+          task_template_id?: string | null
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_completions_custom_task_id_fkey"
+            columns: ["custom_task_id"]
+            isOneToOne: false
+            referencedRelation: "custom_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_completions_task_template_id_fkey"
+            columns: ["task_template_id"]
+            isOneToOne: false
+            referencedRelation: "task_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon: string
+          id: string
+          is_active: boolean
+          max_points: number
+          name: string
+          points_per_unit: number
+          target: number
+          task_type: Database["public"]["Enums"]["task_type"]
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon?: string
+          id?: string
+          is_active?: boolean
+          max_points?: number
+          name: string
+          points_per_unit?: number
+          target?: number
+          task_type: Database["public"]["Enums"]["task_type"]
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon?: string
+          id?: string
+          is_active?: boolean
+          max_points?: number
+          name?: string
+          points_per_unit?: number
+          target?: number
+          task_type?: Database["public"]["Enums"]["task_type"]
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +169,15 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      task_type:
+        | "steps"
+        | "workout"
+        | "reading"
+        | "sleep_bedtime"
+        | "sleep_wake"
+        | "journaling"
+        | "custom_binary"
+        | "custom_numeric"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +304,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      task_type: [
+        "steps",
+        "workout",
+        "reading",
+        "sleep_bedtime",
+        "sleep_wake",
+        "journaling",
+        "custom_binary",
+        "custom_numeric",
+      ],
+    },
   },
 } as const
