@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Activity, Brain, Moon, BookOpen, Dumbbell, Heart, Users, Sparkles } from 'lucide-react';
 import { TaskTemplate } from '@/hooks/useTaskTemplates';
 import { Badge } from '@/components/ui/badge';
+import { TaskConfigurationPanel, TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
 
 interface TaskSelectionGridProps {
   groupedTemplates: Record<string, TaskTemplate[]>;
-  selectedTasks: string[];
-  onToggleTask: (taskId: string) => void;
+  selectedTasks: Map<string, TaskConfigOverrides>;
+  onToggleTask: (taskId: string, template: TaskTemplate) => void;
+  onUpdateConfig: (taskId: string, config: TaskConfigOverrides) => void;
 }
 
 const categoryIcons: Record<string, React.ElementType> = {
@@ -47,7 +50,9 @@ export function TaskSelectionGrid({
   groupedTemplates,
   selectedTasks,
   onToggleTask,
+  onUpdateConfig,
 }: TaskSelectionGridProps) {
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const categories = Object.keys(groupedTemplates);
 
   return (
@@ -64,52 +69,88 @@ export function TaskSelectionGrid({
               <span className="text-xs text-muted-foreground">({tasks.length})</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               {tasks.map((task) => {
-                const isSelected = selectedTasks.includes(task.id);
+                const isSelected = selectedTasks.has(task.id);
+                const config = selectedTasks.get(task.id);
+                const isExpanded = expandedTask === task.id;
+
                 return (
-                  <motion.button
+                  <motion.div
                     key={task.id}
-                    onClick={() => onToggleTask(task.id)}
-                    className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                    className={`relative p-4 rounded-xl border-2 transition-all ${
                       isSelected
                         ? 'border-primary bg-primary/10'
                         : 'border-border bg-card hover:border-muted-foreground/30'
                     }`}
-                    whileTap={{ scale: 0.98 }}
+                    layout
                   >
-                    {isSelected && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center"
-                      >
-                        <Check className="w-3 h-3 text-primary-foreground" />
-                      </motion.div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => onToggleTask(task.id, task)}
+                      className="w-full text-left"
+                    >
+                      {isSelected && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center"
+                        >
+                          <Check className="w-3 h-3 text-primary-foreground" />
+                        </motion.div>
+                      )}
 
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${categoryColors[category] || 'bg-muted'}`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{task.name}</p>
-                        {task.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                            {task.description}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 mt-2">
-                          <Badge variant="outline" className="text-xs">
-                            {scoringTypeLabels[task.scoring_type] || task.scoring_type}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground capitalize">
-                            {task.unit.replace('_', ' ')}
-                          </span>
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg ${categoryColors[category] || 'bg-muted'}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate pr-6">{task.name}</p>
+                          {task.description && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                              {task.description}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <Badge variant="outline" className="text-xs">
+                              {config?.scoring_mode === 'binary' 
+                                ? 'Yes/No' 
+                                : scoringTypeLabels[task.scoring_type] || task.scoring_type}
+                            </Badge>
+                            {config?.scoring_mode === 'detailed' && (
+                              <>
+                                {config?.target_time && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {config.target_time}
+                                  </Badge>
+                                )}
+                                {config?.threshold && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {config.threshold} min
+                                  </Badge>
+                                )}
+                                {config?.target && !config?.threshold && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {config.target.toLocaleString()} goal
+                                  </Badge>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.button>
+                    </button>
+
+                    {isSelected && config && (
+                      <TaskConfigurationPanel
+                        template={task}
+                        config={config}
+                        onChange={(newConfig) => onUpdateConfig(task.id, newConfig)}
+                        isExpanded={isExpanded}
+                        onToggleExpand={() => setExpandedTask(isExpanded ? null : task.id)}
+                      />
+                    )}
+                  </motion.div>
                 );
               })}
             </div>
