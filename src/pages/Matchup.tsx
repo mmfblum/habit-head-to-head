@@ -1,12 +1,14 @@
 import { motion } from 'framer-motion';
-import { Progress } from '@/components/ui/progress';
-import { MessageCircle, TrendingUp, Zap, Activity } from 'lucide-react';
+import { MessageCircle, TrendingUp, Zap, Activity, ListChecks } from 'lucide-react';
 import { MatchupScoreboard } from '@/components/matchup/MatchupScoreboard';
 import { ActivityFeed } from '@/components/matchup/ActivityFeed';
+import { TaskBreakdown } from '@/components/matchup/TaskBreakdown';
 import { useMatchupActivity, useMatchupScores } from '@/hooks/useMatchupActivity';
+import { useTaskBreakdown } from '@/hooks/useTaskBreakdown';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function Matchup() {
   const { user: authUser } = useAuth();
@@ -33,6 +35,14 @@ export default function Matchup() {
     weekId: currentWeek?.id,
     userIds,
     enabled: !!currentWeek?.id && userIds.length === 2,
+  });
+
+  // Task breakdown comparison
+  const { data: taskBreakdown, isLoading: tasksLoading } = useTaskBreakdown({
+    seasonId: leagueDetails?.current_season?.id,
+    weekId: currentWeek?.id,
+    userId: currentMember?.user_id,
+    opponentId: opponent?.user_id,
   });
 
   // Build participant data
@@ -95,29 +105,43 @@ export default function Matchup() {
       />
 
       <main className="px-4 py-4 space-y-6">
-        {/* Live Activity Feed */}
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <Activity className="w-4 h-4 text-primary" />
-            <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-              Live Activity
-            </h2>
-            {activityEvents && activityEvents.length > 0 && (
-              <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
-                {activityEvents.length} events
-              </span>
-            )}
-          </div>
-          
-          <div className="card-elevated rounded-xl p-3">
-            <ActivityFeed
-              events={activityEvents || []}
-              currentUserId={authUser?.id}
-              onScrollPositionChange={setIsAtTop}
-              isLoading={activityLoading}
+        {/* Tabbed content: Activity & Tasks */}
+        <Tabs defaultValue="activity" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-3">
+            <TabsTrigger value="activity" className="flex items-center gap-1.5">
+              <Activity className="w-4 h-4" />
+              <span>Live Activity</span>
+              {activityEvents && activityEvents.length > 0 && (
+                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full ml-1">
+                  {activityEvents.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="tasks" className="flex items-center gap-1.5">
+              <ListChecks className="w-4 h-4" />
+              <span>Task Breakdown</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="activity" className="mt-0">
+            <div className="card-elevated rounded-xl p-3">
+              <ActivityFeed
+                events={activityEvents || []}
+                currentUserId={authUser?.id}
+                onScrollPositionChange={setIsAtTop}
+                isLoading={activityLoading}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="tasks" className="mt-0">
+            <TaskBreakdown
+              tasks={taskBreakdown || []}
+              opponentName={opponentParticipant.display_name}
+              isLoading={tasksLoading}
             />
-          </div>
-        </section>
+          </TabsContent>
+        </Tabs>
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3">
