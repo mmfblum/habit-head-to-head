@@ -6,11 +6,14 @@ import { BinaryCheckinInput } from './BinaryCheckinInput';
 import { NumericCheckinInput } from './NumericCheckinInput';
 import { TimeCheckinInput } from './TimeCheckinInput';
 import { DurationCheckinInput } from './DurationCheckinInput';
+import { TimerCheckinInput } from './TimerCheckinInput';
+import { VerificationBadge } from './VerificationBadge';
 import { useSubmitCheckin } from '@/hooks/useTasksWithCheckins';
 import { TASK_ICONS } from '@/types/checkin';
 import type { TaskWithTemplate, CheckinValue } from '@/types/checkin';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { getVerificationConfig, type VerificationConfig, type VerificationMetadata } from '@/lib/verification';
 
 interface CheckinCardProps {
   task: TaskWithTemplate;
@@ -24,6 +27,9 @@ export function CheckinCard({ task, streakDays = 0 }: CheckinCardProps) {
   // Get config from task instance
   const config = task.config as Record<string, unknown>;
   const template = task.template;
+  const verificationConfig = getVerificationConfig(config);
+  const existingMetadata = task.todayCheckin?.metadata as VerificationMetadata | null;
+  const isTimerBased = verificationConfig?.method === 'timer_based';
   
   // Initialize state from existing check-in or defaults
   const [binaryValue, setBinaryValue] = useState(task.todayCheckin?.boolean_value ?? false);
@@ -45,7 +51,7 @@ export function CheckinCard({ task, streakDays = 0 }: CheckinCardProps) {
     return () => clearTimeout(timeout);
   }, [binaryValue, numericValue, timeValue, durationValue, hasChanges]);
 
-  const saveCheckin = async () => {
+  const saveCheckin = async (metadata?: Record<string, unknown>) => {
     const value: CheckinValue = {};
     
     switch (task.input_type) {
@@ -63,12 +69,44 @@ export function CheckinCard({ task, streakDays = 0 }: CheckinCardProps) {
         break;
     }
 
+    // Include verification metadata if provided
+    if (metadata) {
+      value.metadata = metadata;
+    }
+
     try {
       await submitCheckin.mutateAsync({
         taskInstanceId: task.id,
         value,
       });
       setHasChanges(false);
+    } catch (error) {
+      toast({
+        title: 'Error saving check-in',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Handler for timer completion with metadata
+  const handleTimerComplete = async (minutes: number, metadata: Record<string, unknown>) => {
+    setDurationValue(minutes);
+    
+    const value: CheckinValue = {
+      duration_minutes: minutes,
+      metadata,
+    };
+
+    try {
+      await submitCheckin.mutateAsync({
+        taskInstanceId: task.id,
+        value,
+      });
+      toast({
+        title: 'Session verified!',
+        description: `${minutes} minutes logged with timer verification.`,
+      });
     } catch (error) {
       toast({
         title: 'Error saving check-in',
@@ -179,6 +217,20 @@ export function CheckinCard({ task, streakDays = 0 }: CheckinCardProps) {
           />
         );
       case 'duration':
+        // Use TimerCheckinInput for timer-based verification (meditation, journaling)
+        if (isTimerBased) {
+          return (
+            <TimerCheckinInput
+              value={durationValue}
+              onChange={handleTimerComplete}
+              disabled={submitCheckin.isPending}
+              threshold={config.threshold as number}
+              minDurationSeconds={verificationConfig?.min_duration_seconds || 60}
+              taskName={task.task_name}
+            />
+          );
+        }
+        // Fall back to standard duration input
         return (
           <DurationCheckinInput
             value={durationValue}
@@ -227,13 +279,18 @@ export function CheckinCard({ task, streakDays = 0 }: CheckinCardProps) {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-semibold text-sm">{task.task_name}</h3>
             {isComplete && (
               <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                 <Check className="w-3 h-3 text-primary-foreground" />
               </div>
             )}
+            <VerificationBadge
+              verificationConfig={verificationConfig}
+              metadata={existingMetadata}
+              isVerified={!!existingMetadata?.confirmed}
+            />
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             {template?.description || 'Complete this task to earn points'}
