@@ -1,9 +1,21 @@
 import { motion } from 'framer-motion';
-import { User } from '@/lib/mockData';
 import { Crown, TrendingUp, TrendingDown, Skull } from 'lucide-react';
 
+// Define the User interface locally to avoid circular dependencies
+export interface LeaderboardUser {
+  id: string;
+  username: string;
+  avatar: string;
+  weeklyScore: number;
+  seasonScore: number;
+  wins: number;
+  losses: number;
+  streak: number;
+  rank: number;
+}
+
 interface LeaderboardRowProps {
-  user: User;
+  user: LeaderboardUser;
   index: number;
   isCurrentUser?: boolean;
   isLowestScorer?: boolean;
