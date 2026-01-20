@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronLeft, ChevronRight, Copy, Share2, Trophy, Users, Zap } from 'lucide-react';
@@ -12,6 +12,7 @@ import { useTaskTemplatesByCategory, TaskTemplate } from '@/hooks/useTaskTemplat
 import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
 import { TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
+import { DifficultyPresets, DifficultyLevel, applyDifficultyToConfig, difficultyConfigs } from './DifficultyPresets';
 
 type WizardStep = 'details' | 'tasks' | 'invite';
 
@@ -31,6 +32,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   });
   // Map of taskId -> config overrides
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>(null);
   const [createdLeague, setCreatedLeague] = useState<{ id: string; invite_code: string | null } | null>(null);
   const [createdSeason, setCreatedSeason] = useState<{ id: string } | null>(null);
 
@@ -72,7 +74,18 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       if (newMap.has(taskId)) {
         newMap.delete(taskId);
       } else {
-        newMap.set(taskId, getInitialConfig(template));
+        // Apply difficulty preset if one is selected
+        const baseConfig = getInitialConfig(template);
+        if (difficulty) {
+          const difficultyOverrides = applyDifficultyToConfig(
+            template.scoring_type,
+            template.default_config as Record<string, any>,
+            difficulty
+          );
+          newMap.set(taskId, { ...baseConfig, ...difficultyOverrides });
+        } else {
+          newMap.set(taskId, baseConfig);
+        }
       }
       return newMap;
     });
@@ -84,6 +97,38 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       newMap.set(taskId, config);
       return newMap;
     });
+  };
+
+  // When difficulty changes, update all selected tasks
+  const handleDifficultyChange = (level: DifficultyLevel) => {
+    setDifficulty(level);
+    
+    if (!level || !groupedTemplates) return;
+    
+    // Get all templates as a flat array
+    const allTemplates = Object.values(groupedTemplates).flat();
+    
+    setTaskConfigs((prev) => {
+      const newMap = new Map(prev);
+      
+      // Update each selected task with the new difficulty
+      prev.forEach((config, taskId) => {
+        const template = allTemplates.find((t) => t.id === taskId);
+        if (template) {
+          const baseConfig = getInitialConfig(template);
+          const difficultyOverrides = applyDifficultyToConfig(
+            template.scoring_type,
+            template.default_config as Record<string, any>,
+            level
+          );
+          newMap.set(taskId, { ...baseConfig, ...difficultyOverrides });
+        }
+      });
+      
+      return newMap;
+    });
+    
+    toast.success(`Applied ${difficultyConfigs[level].label} preset to all tasks`);
   };
 
   const handleTasksSubmit = async () => {
@@ -282,13 +327,15 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="text-center mb-6">
+                <div className="text-center mb-4">
                   <Zap className="w-12 h-12 text-secondary mx-auto mb-3" />
                   <h3 className="text-xl font-display font-bold">Select & Configure Tasks</h3>
                   <p className="text-muted-foreground">
                     Choose tasks and customize targets for your league ({taskConfigs.size} selected)
                   </p>
                 </div>
+
+                <DifficultyPresets selected={difficulty} onSelect={handleDifficultyChange} />
 
                 {tasksLoading ? (
                   <div className="text-center py-8 text-muted-foreground">Loading tasks...</div>
