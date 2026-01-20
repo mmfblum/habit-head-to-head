@@ -1,12 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { toast } from 'sonner';
 import type { Tables } from '@/integrations/supabase/types';
 
 export type LeagueTaskConfig = Tables<'league_task_configs'> & {
   task_template: Tables<'task_templates'>;
 };
+
+// Track recent local mutations to avoid showing toasts for own changes
+const recentLocalChanges = new Set<string>();
 
 export function useLeagueTaskConfigs(seasonId?: string) {
   const queryClient = useQueryClient();
@@ -27,7 +31,36 @@ export function useLeagueTaskConfigs(seasonId?: string) {
         },
         (payload) => {
           console.log('Task config changed:', payload);
-          // Invalidate and refetch when any change happens
+          
+          // Check if this was a local change we just made
+          const changeKey = `${payload.eventType}-${(payload.new as any)?.id || (payload.old as any)?.id}`;
+          if (recentLocalChanges.has(changeKey)) {
+            recentLocalChanges.delete(changeKey);
+            // Still invalidate, but don't show toast for own changes
+            queryClient.invalidateQueries({ queryKey: ['league-task-configs', seasonId] });
+            return;
+          }
+          
+          // Show toast for remote changes
+          const eventType = payload.eventType;
+          if (eventType === 'INSERT') {
+            toast.info('Task added', {
+              description: 'A league admin added a new task',
+              icon: '➕',
+            });
+          } else if (eventType === 'UPDATE') {
+            toast.info('Task updated', {
+              description: 'A league admin updated task settings',
+              icon: '✏️',
+            });
+          } else if (eventType === 'DELETE') {
+            toast.info('Task removed', {
+              description: 'A league admin removed a task',
+              icon: '🗑️',
+            });
+          }
+          
+          // Invalidate and refetch
           queryClient.invalidateQueries({ queryKey: ['league-task-configs', seasonId] });
         }
       )
@@ -59,6 +92,13 @@ export function useLeagueTaskConfigs(seasonId?: string) {
   });
 }
 
+// Helper to mark a change as local (call before mutation)
+export function markLocalChange(eventType: string, id: string) {
+  recentLocalChanges.add(`${eventType}-${id}`);
+  // Clean up after 5 seconds in case the realtime event never arrives
+  setTimeout(() => recentLocalChanges.delete(`${eventType}-${id}`), 5000);
+}
+
 export function useUpdateTaskConfig() {
   const queryClient = useQueryClient();
 
@@ -74,6 +114,9 @@ export function useUpdateTaskConfig() {
         is_enabled?: boolean;
       };
     }) => {
+      // Mark this as a local change to avoid showing toast for own action
+      markLocalChange('UPDATE', configId);
+      
       const { data, error } = await supabase
         .from('league_task_configs')
         .update(updates)
@@ -130,6 +173,10 @@ export function useAddTaskConfig() {
         .single();
 
       if (error) throw error;
+      
+      // Mark this as a local change to avoid showing toast for own action
+      markLocalChange('INSERT', data.id);
+      
       return data;
     },
     onSuccess: () => {
@@ -144,6 +191,9 @@ export function useRemoveTaskConfig() {
 
   return useMutation({
     mutationFn: async (configId: string) => {
+      // Mark this as a local change to avoid showing toast for own action
+      markLocalChange('UPDATE', configId); // It's an UPDATE since we soft-delete
+      
       // Soft delete by disabling instead of hard delete
       const { error } = await supabase
         .from('league_task_configs')
