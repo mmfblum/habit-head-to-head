@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -8,6 +9,35 @@ export type LeagueTaskConfig = Tables<'league_task_configs'> & {
 };
 
 export function useLeagueTaskConfigs(seasonId?: string) {
+  const queryClient = useQueryClient();
+
+  // Subscribe to realtime changes
+  useEffect(() => {
+    if (!seasonId) return;
+
+    const channel = supabase
+      .channel(`league-task-configs-${seasonId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'league_task_configs',
+          filter: `season_id=eq.${seasonId}`,
+        },
+        (payload) => {
+          console.log('Task config changed:', payload);
+          // Invalidate and refetch when any change happens
+          queryClient.invalidateQueries({ queryKey: ['league-task-configs', seasonId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [seasonId, queryClient]);
+
   return useQuery({
     queryKey: ['league-task-configs', seasonId],
     queryFn: async (): Promise<LeagueTaskConfig[]> => {
