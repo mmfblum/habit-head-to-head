@@ -13,6 +13,7 @@ import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
+import CheckinDemo from "./pages/CheckinDemo";
 import { useUserLeagues } from "./hooks/useLeagues";
 
 const queryClient = new QueryClient();
@@ -107,6 +108,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/checkin-demo"
+          element={
+            <ProtectedRoute>
+              <CheckinDemo />
             </ProtectedRoute>
           }
         />
