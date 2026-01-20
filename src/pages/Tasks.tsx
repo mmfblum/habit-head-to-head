@@ -1,42 +1,122 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { TaskCard } from '@/components/TaskCard';
-import { tasks as initialTasks, Task } from '@/lib/mockData';
+import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Filter } from 'lucide-react';
+import { Plus, Filter, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DailyCheckinList } from '@/components/checkin';
+import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
+import { useUserLeagues } from '@/hooks/useLeagues';
+import { useAuth } from '@/hooks/useAuth';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
 export default function Tasks() {
-  const [taskList, setTaskList] = useState<Task[]>(initialTasks);
+  const { user } = useAuth();
+  const { data: leaguesData, isLoading: leaguesLoading } = useUserLeagues();
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   
-  const completedCount = taskList.filter(t => t.currentValue >= t.target).length;
-  const totalPoints = taskList.reduce((sum, task) => {
-    const earned = Math.min(task.currentValue * task.pointsPerUnit, task.maxPoints);
-    return sum + earned;
-  }, 0);
-  const maxPossiblePoints = taskList.reduce((sum, task) => sum + task.maxPoints, 0);
-  const progress = (completedCount / taskList.length) * 100;
-
-  const handleTaskUpdate = (taskId: string, value: number) => {
-    setTaskList(prev => prev.map(task => 
-      task.id === taskId ? { ...task, currentValue: value, completed: value >= task.target } : task
-    ));
+  // Get the first league's active season for now
+  // In a full app, you'd let users select their league/season
+  // Extract leagues from the joined data structure
+  const leagues = leaguesData?.map(lm => lm.leagues).filter(Boolean);
+  const currentLeague = leagues?.[0];
+  const currentSeasonId = undefined; // Would come from league's active season - for now undefined to show demo
+  
+  const { data: tasks = [], isLoading: tasksLoading } = useTasksWithCheckins(
+    currentSeasonId,
+    selectedDate
+  );
+  
+  // Calculate daily stats
+  const completedCount = tasks.filter(t => {
+    if (t.input_type === 'binary') return t.todayCheckin?.boolean_value;
+    if (t.input_type === 'numeric') {
+      const config = t.config as Record<string, unknown>;
+      const threshold = (config.threshold as number) || (config.daily_cap as number) || 0;
+      return (t.todayCheckin?.numeric_value || 0) >= threshold;
+    }
+    if (t.input_type === 'duration') {
+      const config = t.config as Record<string, unknown>;
+      const threshold = (config.threshold as number) || 0;
+      return (t.todayCheckin?.duration_minutes || 0) >= threshold;
+    }
+    if (t.input_type === 'time') return !!t.todayCheckin?.time_value;
+    return false;
+  }).length;
+  
+  const progress = tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
+  
+  // Navigate dates
+  const goToPreviousDay = () => {
+    setSelectedDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() - 1);
+      return newDate;
+    });
   };
+  
+  const goToNextDay = () => {
+    setSelectedDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() + 1);
+      return newDate;
+    });
+  };
+  
+  const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+  
+  const categories = ['All', 'Fitness', 'Sleep', 'Learning', 'Mindfulness', 'Productivity'];
+  
+  // Filter tasks by category
+  const filteredTasks = activeCategory && activeCategory !== 'All'
+    ? tasks.filter(t => t.template?.category?.toLowerCase() === activeCategory.toLowerCase())
+    : tasks;
+
+  // Show demo content if no season is active
+  const showDemo = !currentSeasonId;
 
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border safe-top">
         <div className="px-4 py-3">
+          {/* Date navigation */}
           <div className="flex items-center justify-between mb-3">
-            <h1 className="font-display font-bold text-xl">Today's Tasks</h1>
-            <div className="flex items-center gap-2">
-              <button className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                <Filter className="w-4 h-4 text-muted-foreground" />
-              </button>
-              <button className="w-9 h-9 rounded-full bg-primary flex items-center justify-center">
-                <Plus className="w-4 h-4 text-primary-foreground" />
-              </button>
-            </div>
+            <Button variant="ghost" size="icon" onClick={goToPreviousDay}>
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" className="gap-2">
+                  <Calendar className="w-4 h-4" />
+                  <span className="font-display font-bold">
+                    {isToday ? 'Today' : format(selectedDate, 'EEE, MMM d')}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="center">
+                <CalendarComponent
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => date && setSelectedDate(date)}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+            
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={goToNextDay}
+              disabled={isToday}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </Button>
           </div>
           
           {/* Daily Progress */}
@@ -44,14 +124,16 @@ export default function Tasks() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">Daily Progress</span>
               <span className="text-sm font-semibold">
-                {completedCount}/{taskList.length} Complete
+                {completedCount}/{tasks.length} Complete
               </span>
             </div>
             <Progress value={progress} className="h-2" />
             <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-muted-foreground">Points earned today</span>
+              <span className="text-xs text-muted-foreground">
+                {isToday ? 'Keep going!' : format(selectedDate, 'MMMM d, yyyy')}
+              </span>
               <span className="score-text text-sm text-primary">
-                +{Math.round(totalPoints)} / {maxPossiblePoints}
+                {Math.round(progress)}%
               </span>
             </div>
           </div>
@@ -59,16 +141,18 @@ export default function Tasks() {
       </header>
 
       <main className="px-4 py-4">
-        {/* Task Categories */}
+        {/* Category filters */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2 -mx-4 px-4">
-          {['All', 'Fitness', 'Wellness', 'Custom'].map((category, i) => (
+          {categories.map((category) => (
             <button
               key={category}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                i === 0 
+              onClick={() => setActiveCategory(category === 'All' ? null : category)}
+              className={cn(
+                'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
+                (category === 'All' && !activeCategory) || activeCategory === category
                   ? 'bg-primary text-primary-foreground' 
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
+              )}
             >
               {category}
             </button>
@@ -76,35 +160,40 @@ export default function Tasks() {
         </div>
 
         {/* Task List */}
-        <div className="space-y-3">
-          {taskList.map((task, index) => (
-            <motion.div
-              key={task.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <TaskCard task={task} onUpdate={handleTaskUpdate} />
-            </motion.div>
-          ))}
-        </div>
+        {showDemo ? (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📋</div>
+            <h2 className="text-xl font-display font-bold mb-2">No Active Season</h2>
+            <p className="text-muted-foreground mb-4">
+              Join or create a league to start tracking your daily tasks.
+            </p>
+            <Button>Join a League</Button>
+          </div>
+        ) : (
+          <DailyCheckinList 
+            tasks={filteredTasks} 
+            isLoading={tasksLoading || leaguesLoading} 
+          />
+        )}
 
         {/* Add Custom Task Prompt */}
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          whileTap={{ scale: 0.98 }}
-          className="w-full mt-6 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary/50 transition-colors"
-        >
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <Plus className="w-5 h-5" />
-            <span className="font-medium">Add Custom Task</span>
-          </div>
-          <p className="text-xs text-muted-foreground/70 mt-1">
-            1 of 2 custom task slots remaining
-          </p>
-        </motion.button>
+        {!showDemo && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full mt-6 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary/50 transition-colors"
+          >
+            <div className="flex items-center justify-center gap-2 text-muted-foreground">
+              <Plus className="w-5 h-5" />
+              <span className="font-medium">Add Custom Task</span>
+            </div>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              1 of 2 custom task slots remaining
+            </p>
+          </motion.button>
+        )}
       </main>
     </div>
   );
