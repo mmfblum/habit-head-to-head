@@ -209,19 +209,23 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="weeks">Season Length</Label>
-                    <div className="flex gap-2">
-                      {[2, 3, 4].map((weeks) => (
-                        <Button
-                          key={weeks}
-                          type="button"
-                          variant={formData.weeksCount === weeks ? 'default' : 'outline'}
-                          className="flex-1"
-                          onClick={() => setFormData({ ...formData, weeksCount: weeks })}
-                        >
-                          {weeks} weeks
-                        </Button>
-                      ))}
+                    <Label htmlFor="months">Season Length</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[1, 2, 3, 4, 5, 6].map((months) => {
+                        const weeks = months * 4;
+                        return (
+                          <Button
+                            key={months}
+                            type="button"
+                            variant={formData.weeksCount === weeks ? 'default' : 'outline'}
+                            className="h-auto py-2 flex-col"
+                            onClick={() => setFormData({ ...formData, weeksCount: weeks })}
+                          >
+                            <span>{months} month{months > 1 ? 's' : ''}</span>
+                            <span className="text-xs opacity-70">({weeks} weeks)</span>
+                          </Button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
