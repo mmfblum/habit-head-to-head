@@ -6,6 +6,7 @@ import {
   ThresholdConfigInput,
   ScoringModeToggle,
   PointsConfigInput,
+  ScoringPreview,
   type ScoringMode,
 } from './config-inputs';
 
@@ -216,6 +217,8 @@ export function TaskConfigurationPanel({
               ) : (
                 renderDetailedConfig()
               )}
+
+              <ScoringPreview template={template} config={config} />
             </div>
           </motion.div>
         )}
