@@ -87,25 +87,33 @@ export function useSubmitCheckin() {
 
       if (existing) {
         // Update existing check-in
+        const updateData: Record<string, unknown> = {
+          ...value,
+          updated_at: new Date().toISOString(),
+        };
+        if (value.metadata) {
+          updateData.metadata = value.metadata as unknown;
+        }
         const { error } = await supabase
           .from('daily_checkins')
-          .update({
-            ...value,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', existing.id);
 
         if (error) throw error;
       } else {
         // Create new check-in
+        const insertData: Record<string, unknown> = {
+          task_instance_id: taskInstanceId,
+          user_id: user.id,
+          checkin_date: checkinDate,
+          ...value,
+        };
+        if (value.metadata) {
+          insertData.metadata = value.metadata as unknown;
+        }
         const { error } = await supabase
           .from('daily_checkins')
-          .insert({
-            task_instance_id: taskInstanceId,
-            user_id: user.id,
-            checkin_date: checkinDate,
-            ...value,
-          });
+          .insert(insertData as never);
 
         if (error) throw error;
       }
