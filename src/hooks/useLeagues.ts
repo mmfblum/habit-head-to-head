@@ -60,8 +60,10 @@ export function useCreateLeague() {
 
       return league;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-leagues'] });
+    onSuccess: async () => {
+      // Invalidate both the exact key and base key to ensure LeagueGate updates
+      await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
+      await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
   });
 }
@@ -208,8 +210,10 @@ export function useJoinLeague() {
 
       return league;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-leagues'] });
+    onSuccess: async () => {
+      // Invalidate and refetch to ensure LeagueGate updates immediately
+      await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
+      await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
   });
 }
