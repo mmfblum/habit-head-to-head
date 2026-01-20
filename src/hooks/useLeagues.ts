@@ -41,7 +41,7 @@ export function useCreateLeague() {
       // Create the league
       const { data: league, error: leagueError } = await supabase
         .from('leagues')
-        .insert({ name, description })
+        .insert({ name, description, created_by: user.id })
         .select()
         .single();
 
