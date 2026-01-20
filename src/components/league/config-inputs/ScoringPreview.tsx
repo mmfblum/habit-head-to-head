@@ -22,6 +22,15 @@ function addMinutesToTime(time: string, minutesToAdd: number): string {
   return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
 }
 
+function subtractMinutesFromTime(time: string, minutesToSubtract: number): string {
+  const [hours, minutes] = time.split(':').map(Number);
+  let totalMinutes = hours * 60 + minutes - minutesToSubtract;
+  if (totalMinutes < 0) totalMinutes += 24 * 60;
+  const newHours = Math.floor(totalMinutes / 60) % 24;
+  const newMinutes = totalMinutes % 60;
+  return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+}
+
 export function ScoringPreview({ template, config }: ScoringPreviewProps) {
   const examples = generateExamples(template, config);
 
@@ -70,12 +79,12 @@ function generateExamples(template: TaskTemplate, config: TaskConfigOverrides): 
       const targetTime = config.target_time || defaultConfig?.target_time || '06:30';
       const pointsOnTime = config.points || defaultConfig?.points_on_time || 50;
       const penaltyPerMin = defaultConfig?.penalty_per_minute || 1;
-      const graceMinutes = defaultConfig?.grace_minutes || 15;
 
       return [
+        { scenario: `Wake at ${formatTime(subtractMinutesFromTime(targetTime, 15))} (early)`, points: pointsOnTime },
         { scenario: `Wake at ${formatTime(targetTime)} (on time)`, points: pointsOnTime },
-        { scenario: `Wake at ${formatTime(addMinutesToTime(targetTime, graceMinutes))} (+${graceMinutes}min)`, points: pointsOnTime - (graceMinutes * penaltyPerMin) },
-        { scenario: `Wake at ${formatTime(addMinutesToTime(targetTime, 30))} (+30min)`, points: Math.max(0, pointsOnTime - (30 * penaltyPerMin)) },
+        { scenario: `Wake at ${formatTime(addMinutesToTime(targetTime, 30))} (+30 min late)`, points: pointsOnTime - (30 * penaltyPerMin) },
+        { scenario: `Wake at ${formatTime(addMinutesToTime(targetTime, 60))} (+1 hr late)`, points: pointsOnTime - (60 * penaltyPerMin) },
       ];
     }
 
@@ -85,9 +94,10 @@ function generateExamples(template: TaskTemplate, config: TaskConfigOverrides): 
       const penaltyPerMin = defaultConfig?.penalty_per_minute || 1;
 
       return [
+        { scenario: `In bed by ${formatTime(subtractMinutesFromTime(targetTime, 15))} (early)`, points: pointsOnTime },
         { scenario: `In bed by ${formatTime(targetTime)} (on time)`, points: pointsOnTime },
-        { scenario: `In bed by ${formatTime(addMinutesToTime(targetTime, 15))} (+15min)`, points: Math.max(0, pointsOnTime - (15 * penaltyPerMin)) },
-        { scenario: `In bed by ${formatTime(addMinutesToTime(targetTime, 30))} (+30min)`, points: Math.max(0, pointsOnTime - (30 * penaltyPerMin)) },
+        { scenario: `In bed by ${formatTime(addMinutesToTime(targetTime, 30))} (+30 min late)`, points: pointsOnTime - (30 * penaltyPerMin) },
+        { scenario: `In bed by ${formatTime(addMinutesToTime(targetTime, 60))} (+1 hr late)`, points: pointsOnTime - (60 * penaltyPerMin) },
       ];
     }
 
