@@ -1,165 +1,121 @@
 import { motion } from 'framer-motion';
-import { currentMatchup, tasks, currentUser, opponent } from '@/lib/mockData';
 import { Progress } from '@/components/ui/progress';
-import { MessageCircle, TrendingUp, Clock, Zap } from 'lucide-react';
+import { MessageCircle, TrendingUp, Zap, Activity } from 'lucide-react';
+import { MatchupScoreboard } from '@/components/matchup/MatchupScoreboard';
+import { ActivityFeed } from '@/components/matchup/ActivityFeed';
+import { useMatchupActivity, useMatchupScores } from '@/hooks/useMatchupActivity';
+import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
+import { useAuth } from '@/hooks/useAuth';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Matchup() {
-  const { userScore, opponentScore, week } = currentMatchup;
+  const { user: authUser } = useAuth();
+  const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
+
+  // Get current week and members
+  const currentWeek = leagueDetails?.current_week;
+  const members = leagueDetails?.members || [];
+  
+  // For now, pick the first other member as opponent (can be enhanced with matchups table later)
+  const currentMember = members.find(m => m.user_id === authUser?.id);
+  const opponent = members.find(m => m.user_id !== authUser?.id);
+
+  const userIds = [currentMember?.user_id, opponent?.user_id].filter(Boolean) as string[];
+
+  // Real-time scores
+  const { data: scoresMap, isLoading: scoresLoading } = useMatchupScores(
+    currentWeek?.id,
+    userIds
+  );
+
+  // Real-time activity feed
+  const { data: activityEvents, isLoading: activityLoading, setIsAtTop } = useMatchupActivity({
+    weekId: currentWeek?.id,
+    userIds,
+    enabled: !!currentWeek?.id && userIds.length === 2,
+  });
+
+  // Build participant data
+  const userScore = scoresMap?.get(currentMember?.user_id || '') || 0;
+  const opponentScore = scoresMap?.get(opponent?.user_id || '') || 0;
+
+  const userParticipant = {
+    id: currentMember?.user_id || '',
+    display_name: currentMember?.display_name || 'You',
+    avatar_url: currentMember?.avatar_url || null,
+    score: userScore,
+  };
+
+  const opponentParticipant = {
+    id: opponent?.user_id || '',
+    display_name: opponent?.display_name || 'Opponent',
+    avatar_url: opponent?.avatar_url || null,
+    score: opponentScore,
+  };
+
+  const isLoading = leagueLoading || scoresLoading;
   const isWinning = userScore > opponentScore;
   const scoreDiff = Math.abs(userScore - opponentScore);
-  
-  // Simulated opponent task progress
-  const opponentTasks = tasks.map(task => ({
-    ...task,
-    currentValue: Math.floor(task.target * (0.5 + Math.random() * 0.5)),
-  }));
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <div className="p-4 space-y-4">
+          <Skeleton className="h-48 w-full rounded-xl" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentWeek || !opponent) {
+    return (
+      <div className="min-h-screen bg-background pb-24 flex items-center justify-center">
+        <div className="text-center p-8">
+          <div className="text-5xl mb-4">🏟️</div>
+          <h2 className="text-xl font-bold mb-2">No Active Matchup</h2>
+          <p className="text-muted-foreground text-sm">
+            Wait for the season to start or for matchups to be generated.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header with VS display */}
-      <header className="relative overflow-hidden safe-top">
-        <div 
-          className="absolute inset-0 opacity-30"
-          style={{ background: 'var(--gradient-hero)' }}
-        />
-        <div className="relative px-4 py-6">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Week {week} Matchup
-            </span>
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-pending/20 text-pending text-xs font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-pending animate-pulse" />
-              Live
-            </span>
-          </div>
-
-          {/* Score Display */}
-          <div className="flex items-center justify-center gap-6">
-            {/* User */}
-            <div className="text-center">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-3xl mb-2 mx-auto ring-2 ring-primary/50"
-              >
-                {currentUser.avatar}
-              </motion.div>
-              <p className="font-semibold text-sm">{currentUser.username}</p>
-              <motion.p
-                key={userScore}
-                initial={{ scale: 1.2 }}
-                animate={{ scale: 1 }}
-                className={`score-text text-3xl ${isWinning ? 'text-primary' : ''}`}
-              >
-                {userScore}
-              </motion.p>
-            </div>
-
-            {/* VS */}
-            <div className="flex flex-col items-center">
-              <span className="text-2xl font-display font-bold text-muted-foreground">VS</span>
-              <span className={`text-sm font-bold mt-1 ${isWinning ? 'text-primary' : 'text-loss'}`}>
-                {isWinning ? '+' : '-'}{scoreDiff}
-              </span>
-            </div>
-
-            {/* Opponent */}
-            <div className="text-center">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.1 }}
-                className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center text-3xl mb-2 mx-auto"
-              >
-                {opponent.avatar}
-              </motion.div>
-              <p className="font-semibold text-sm">{opponent.username}</p>
-              <p className={`score-text text-3xl ${!isWinning ? 'text-loss' : ''}`}>
-                {opponentScore}
-              </p>
-            </div>
-          </div>
-
-          {/* Time remaining */}
-          <div className="flex items-center justify-center gap-2 mt-4 text-muted-foreground">
-            <Clock className="w-4 h-4" />
-            <span className="text-xs">2 days, 14 hours remaining</span>
-          </div>
-        </div>
-      </header>
+      {/* Scoreboard Header */}
+      <MatchupScoreboard
+        user={userParticipant}
+        opponent={opponentParticipant}
+        weekNumber={currentWeek.week_number}
+        weekEndDate={currentWeek.end_date}
+        isLive={!currentWeek.is_locked}
+      />
 
       <main className="px-4 py-4 space-y-6">
-        {/* Task Comparison */}
+        {/* Live Activity Feed */}
         <section>
-          <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">
-            Task Breakdown
-          </h2>
+          <div className="flex items-center gap-2 mb-3">
+            <Activity className="w-4 h-4 text-primary" />
+            <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+              Live Activity
+            </h2>
+            {activityEvents && activityEvents.length > 0 && (
+              <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
+                {activityEvents.length} events
+              </span>
+            )}
+          </div>
           
-          <div className="space-y-3">
-            {tasks.map((task, index) => {
-              const opponentTask = opponentTasks[index];
-              const userProgress = (task.currentValue / task.target) * 100;
-              const opponentProgress = (opponentTask.currentValue / opponentTask.target) * 100;
-              const userPoints = Math.round(Math.min(task.currentValue * task.pointsPerUnit, task.maxPoints));
-              const opponentPoints = Math.round(Math.min(opponentTask.currentValue * opponentTask.pointsPerUnit, opponentTask.maxPoints));
-              const isUserAhead = userPoints > opponentPoints;
-
-              return (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="card-elevated rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">{task.icon}</span>
-                      <span className="font-semibold text-sm">{task.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className={isUserAhead ? 'text-primary font-semibold' : 'text-muted-foreground'}>
-                        +{userPoints}
-                      </span>
-                      <span className="text-muted-foreground">vs</span>
-                      <span className={!isUserAhead ? 'text-loss font-semibold' : 'text-muted-foreground'}>
-                        +{opponentPoints}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Dual progress bars */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground w-8">You</span>
-                      <div className="flex-1">
-                        <Progress 
-                          value={userProgress} 
-                          className="h-1.5"
-                          indicatorClassName={userProgress >= 100 ? 'bg-primary' : undefined}
-                        />
-                      </div>
-                      <span className="text-[10px] text-muted-foreground w-12 text-right">
-                        {Math.round(userProgress)}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground w-8">{opponent.username.split(' ')[0]}</span>
-                      <div className="flex-1">
-                        <Progress 
-                          value={opponentProgress} 
-                          className="h-1.5"
-                          indicatorClassName="bg-muted-foreground/50"
-                        />
-                      </div>
-                      <span className="text-[10px] text-muted-foreground w-12 text-right">
-                        {Math.round(opponentProgress)}%
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
+          <div className="card-elevated rounded-xl p-3">
+            <ActivityFeed
+              events={activityEvents || []}
+              currentUserId={authUser?.id}
+              onScrollPositionChange={setIsAtTop}
+              isLoading={activityLoading}
+            />
           </div>
         </section>
 
@@ -181,19 +137,61 @@ export default function Matchup() {
           </motion.button>
         </div>
 
-        {/* Head-to-head history */}
+        {/* Head-to-head summary */}
         <section className="card-elevated rounded-xl p-4">
-          <h3 className="font-semibold text-sm mb-3">Head-to-Head History</h3>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="win-badge">2W</span>
-                <span className="text-sm">vs {opponent.username}</span>
+          <h3 className="font-semibold text-sm mb-3">This Week's Battle</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`
+                w-10 h-10 rounded-lg flex items-center justify-center text-lg
+                ${isWinning ? 'bg-primary/20' : 'bg-loss/20'}
+              `}>
+                {isWinning ? '🏆' : '⚔️'}
+              </div>
+              <div>
+                <p className="font-medium text-sm">
+                  {isWinning ? 'You\'re ahead!' : scoreDiff === 0 ? 'It\'s tied!' : 'Catch up!'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {scoreDiff} point{scoreDiff !== 1 ? 's' : ''} {isWinning ? 'lead' : scoreDiff === 0 ? '' : 'behind'}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <TrendingUp className="w-4 h-4 text-primary" />
-              <span className="text-xs text-muted-foreground">67% win rate</span>
+              <TrendingUp className={`w-4 h-4 ${isWinning ? 'text-primary' : 'text-muted-foreground'}`} />
+              <span className="text-xs text-muted-foreground">
+                vs {opponentParticipant.display_name}
+              </span>
+            </div>
+          </div>
+          
+          {/* Score progress bar */}
+          <div className="mt-4">
+            <div className="h-2 bg-muted rounded-full overflow-hidden flex">
+              <motion.div 
+                className="bg-gradient-primary"
+                initial={{ width: 0 }}
+                animate={{ 
+                  width: `${userScore + opponentScore > 0 
+                    ? (userScore / (userScore + opponentScore)) * 100 
+                    : 50}%` 
+                }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+              />
+              <motion.div 
+                className="bg-loss/60"
+                initial={{ width: 0 }}
+                animate={{ 
+                  width: `${userScore + opponentScore > 0 
+                    ? (opponentScore / (userScore + opponentScore)) * 100 
+                    : 50}%` 
+                }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+              />
+            </div>
+            <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+              <span>You: {userScore} pts</span>
+              <span>{opponentParticipant.display_name}: {opponentScore} pts</span>
             </div>
           </div>
         </section>
