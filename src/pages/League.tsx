@@ -1,13 +1,19 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { LeaderboardRow } from '@/components/LeaderboardRow';
 import { useUserPrimaryLeague, LeagueMemberWithProfile } from '@/hooks/useLeagueDetails';
+import { useIsLeagueAdmin } from '@/hooks/useLeagueTaskConfigs';
 import { useAuth } from '@/hooks/useAuth';
 import { Trophy, Share2, Settings, Skull, Crown, Swords, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ManageTasksDialog } from '@/components/league/ManageTasksDialog';
+import { format, addDays, startOfWeek, nextMonday } from 'date-fns';
 
 export default function League() {
   const { user } = useAuth();
-  const { data: league, isLoading, error } = useUserPrimaryLeague();
+  const { data: league, isLoading, error, leagueId } = useUserPrimaryLeague();
+  const { data: isAdmin } = useIsLeagueAdmin(leagueId);
+  const [showManageTasks, setShowManageTasks] = useState(false);
 
   if (isLoading) {
     return (
@@ -34,6 +40,11 @@ export default function League() {
   const topScorer = sortedMembers[0];
   const currentSeason = league.current_season;
   const currentWeek = league.current_week;
+  
+  // Calculate next week's start date for the "changes take effect" notice
+  const nextWeekStart = currentWeek 
+    ? format(nextMonday(new Date()), 'MMM d') 
+    : undefined;
 
   const copyInviteCode = () => {
     if (league.invite_code) {
@@ -81,9 +92,19 @@ export default function League() {
               >
                 <Share2 className="w-4 h-4 text-muted-foreground" />
               </button>
-              <button className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                <Settings className="w-4 h-4 text-muted-foreground" />
-              </button>
+              {isAdmin && currentSeason && (
+                <button 
+                  onClick={() => setShowManageTasks(true)}
+                  className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+                >
+                  <Settings className="w-4 h-4 text-primary" />
+                </button>
+              )}
+              {!isAdmin && (
+                <button className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                  <Settings className="w-4 h-4 text-muted-foreground" />
+                </button>
+              )}
             </div>
           </div>
           
@@ -229,6 +250,16 @@ export default function League() {
           </motion.section>
         )}
       </main>
+
+      {/* Manage Tasks Dialog for Admins */}
+      {currentSeason && (
+        <ManageTasksDialog
+          open={showManageTasks}
+          onOpenChange={setShowManageTasks}
+          seasonId={currentSeason.id}
+          nextWeekStart={nextWeekStart}
+        />
+      )}
     </div>
   );
 }
