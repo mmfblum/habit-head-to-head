@@ -77,26 +77,42 @@ export function useSubmitCheckin() {
       const checkinDate = format(date ?? new Date(), 'yyyy-MM-dd');
 
       // Check if there's an existing check-in for this task/date
+      // Use .maybeSingle() to avoid 406 error when no rows exist
       const { data: existing } = await supabase
         .from('daily_checkins')
         .select('id')
         .eq('task_instance_id', taskInstanceId)
         .eq('user_id', user.id)
         .eq('checkin_date', checkinDate)
-        .single();
+        .maybeSingle();
+
+      // Build update/insert data, explicitly handling each field to avoid null string issues
+      const baseData: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      // Only include fields that have actual values (not undefined)
+      if (value.boolean_value !== undefined) {
+        baseData.boolean_value = value.boolean_value;
+      }
+      if (value.numeric_value !== undefined) {
+        baseData.numeric_value = value.numeric_value;
+      }
+      if (value.time_value !== undefined && value.time_value !== '') {
+        baseData.time_value = value.time_value;
+      }
+      if (value.duration_minutes !== undefined) {
+        baseData.duration_minutes = value.duration_minutes;
+      }
+      if (value.metadata !== undefined) {
+        baseData.metadata = value.metadata;
+      }
 
       if (existing) {
         // Update existing check-in
-        const updateData: Record<string, unknown> = {
-          ...value,
-          updated_at: new Date().toISOString(),
-        };
-        if (value.metadata) {
-          updateData.metadata = value.metadata as unknown;
-        }
         const { error } = await supabase
           .from('daily_checkins')
-          .update(updateData)
+          .update(baseData)
           .eq('id', existing.id);
 
         if (error) throw error;
@@ -106,11 +122,8 @@ export function useSubmitCheckin() {
           task_instance_id: taskInstanceId,
           user_id: user.id,
           checkin_date: checkinDate,
-          ...value,
+          ...baseData,
         };
-        if (value.metadata) {
-          insertData.metadata = value.metadata as unknown;
-        }
         const { error } = await supabase
           .from('daily_checkins')
           .insert(insertData as never);
