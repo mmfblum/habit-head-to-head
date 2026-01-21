@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import type { Tables } from '@/integrations/supabase/types';
 
 export type LeagueTaskConfig = Tables<'league_task_configs'> & {
-  task_template: Tables<'task_templates'>;
+  task_template: Tables<'task_templates'> | null;
 };
 
 // Track recent local mutations to avoid showing toasts for own changes
