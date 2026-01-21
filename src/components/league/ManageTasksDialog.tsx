@@ -32,8 +32,8 @@ export function ManageTasksDialog({ open, onOpenChange, seasonId, nextWeekStart 
   const [expandedConfigId, setExpandedConfigId] = useState<string | null>(null);
   const [showAddTask, setShowAddTask] = useState(false);
 
-  // Get enabled configs only
-  const enabledConfigs = configs?.filter((c) => c.is_enabled) || [];
+  // Get enabled configs only (filter out any with missing templates)
+  const enabledConfigs = configs?.filter((c) => c.is_enabled && c.task_template) || [];
 
   // Get templates not yet added
   const addedTemplateIds = new Set(enabledConfigs.map((c) => c.task_template_id));
@@ -206,6 +206,11 @@ function TaskConfigCard({
 }: TaskConfigCardProps) {
   const template = config.task_template;
   const currentOverrides = (config.config_overrides || {}) as unknown as TaskConfigOverrides;
+
+  // Safety check - should be filtered out before this, but just in case
+  if (!template) {
+    return null;
+  }
 
   return (
     <motion.div layout className="rounded-xl border border-border bg-card p-4">
