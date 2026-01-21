@@ -247,7 +247,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
+        <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 pb-24">
           <AnimatePresence mode="wait">
             {step === 'details' && (
               <motion.div
