@@ -1,19 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Copy, Share2, Trophy, Users, Zap, Sparkles } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Share2, Trophy, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent } from '@/components/ui/card';
 import { useCreateLeague, useCreateSeason, useConfigureSeasonTasks } from '@/hooks/useLeagues';
 import { useStartSeason } from '@/hooks/useSeasonActions';
 import { useTaskTemplatesByCategory, TaskTemplate } from '@/hooks/useTaskTemplates';
 import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
 import { TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
-import { DifficultyPresets, DifficultyLevel, applyDifficultyToConfig, difficultyConfigs } from './DifficultyPresets';
+import { DifficultyQuickStart, QuickStartDifficulty, DIFFICULTY_PRESETS } from './DifficultyQuickStart';
 
 type WizardStep = 'details' | 'tasks' | 'invite';
 
@@ -24,6 +23,8 @@ const RECOMMENDED_TASK_NAMES = [
   'Journaling',
   'Wake Time',
 ];
+
+const TOTAL_DAILY_POINTS = 100;
 
 interface LeagueFormData {
   name: string;
@@ -39,17 +40,37 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     description: '',
     weeksCount: 4,
   });
-  // Map of taskId -> config overrides
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
-  const [difficulty, setDifficulty] = useState<DifficultyLevel>(null);
   const [createdLeague, setCreatedLeague] = useState<{ id: string; invite_code: string | null } | null>(null);
   const [createdSeason, setCreatedSeason] = useState<{ id: string } | null>(null);
+  const prevTaskCount = useRef(0);
 
   const { groupedTemplates, isLoading: tasksLoading } = useTaskTemplatesByCategory();
   const createLeague = useCreateLeague();
   const createSeason = useCreateSeason();
   const configureTasks = useConfigureSeasonTasks();
   const startSeason = useStartSeason();
+
+  // Auto-update points when task count changes
+  useEffect(() => {
+    if (taskConfigs.size > 0 && taskConfigs.size !== prevTaskCount.current) {
+      const evenPointsPerTask = Math.floor(TOTAL_DAILY_POINTS / taskConfigs.size);
+      
+      setTaskConfigs((prev) => {
+        const newMap = new Map(prev);
+        newMap.forEach((config, taskId) => {
+          newMap.set(taskId, {
+            ...config,
+            binary_points: evenPointsPerTask,
+            points: evenPointsPerTask,
+          });
+        });
+        return newMap;
+      });
+      
+      prevTaskCount.current = taskConfigs.size;
+    }
+  }, [taskConfigs.size]);
 
   const handleDetailsSubmit = async () => {
     if (!formData.name.trim()) {
@@ -84,18 +105,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       if (newMap.has(taskId)) {
         newMap.delete(taskId);
       } else {
-        // Apply difficulty preset if one is selected
-        const baseConfig = getInitialConfig(template);
-        if (difficulty) {
-          const difficultyOverrides = applyDifficultyToConfig(
-            template.scoring_type,
-            template.default_config as Record<string, any>,
-            difficulty
-          );
-          newMap.set(taskId, { ...baseConfig, ...difficultyOverrides });
-        } else {
-          newMap.set(taskId, baseConfig);
-        }
+        newMap.set(taskId, getInitialConfig(template));
       }
       return newMap;
     });
@@ -109,36 +119,29 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     });
   };
 
-  // When difficulty changes, update all selected tasks
-  const handleDifficultyChange = (level: DifficultyLevel) => {
-    setDifficulty(level);
+  const handleClearAll = () => {
+    setTaskConfigs(new Map());
+    prevTaskCount.current = 0;
+  };
+
+  const handleQuickStart = (difficulty: QuickStartDifficulty) => {
+    if (!groupedTemplates) return;
     
-    if (!level || !groupedTemplates) return;
-    
-    // Get all templates as a flat array
     const allTemplates = Object.values(groupedTemplates).flat();
+    const preset = DIFFICULTY_PRESETS[difficulty];
+    const newConfigs = new Map<string, TaskConfigOverrides>();
     
-    setTaskConfigs((prev) => {
-      const newMap = new Map(prev);
-      
-      // Update each selected task with the new difficulty
-      prev.forEach((config, taskId) => {
-        const template = allTemplates.find((t) => t.id === taskId);
-        if (template) {
-          const baseConfig = getInitialConfig(template);
-          const difficultyOverrides = applyDifficultyToConfig(
-            template.scoring_type,
-            template.default_config as Record<string, any>,
-            level
-          );
-          newMap.set(taskId, { ...baseConfig, ...difficultyOverrides });
-        }
-      });
-      
-      return newMap;
+    RECOMMENDED_TASK_NAMES.forEach((taskName) => {
+      const template = allTemplates.find(t => t.name.includes(taskName));
+      if (template) {
+        const baseConfig = getInitialConfig(template);
+        const presetValues = preset.values[taskName as keyof typeof preset.values];
+        newConfigs.set(template.id, { ...baseConfig, ...presetValues });
+      }
     });
     
-    toast.success(`Applied ${difficultyConfigs[level].label} preset to all tasks`);
+    setTaskConfigs(newConfigs);
+    toast.success(`Selected ${newConfigs.size} tasks with ${preset.label} settings!`);
   };
 
   const handleTasksSubmit = async () => {
@@ -160,6 +163,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
           ...(config.target && { target: config.target }),
           ...(config.points && { points: config.points }),
           ...(config.binary_points && { binary_points: config.binary_points }),
+          ...(config.max_tiers && { max_tiers: config.max_tiers }),
         },
       }));
 
@@ -168,7 +172,6 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
         taskConfigs: taskConfigArray,
       });
 
-      // Activate the season to trigger task instance generation
       await startSeason.mutateAsync(createdSeason.id);
 
       setStep('invite');
@@ -363,59 +366,12 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   <span className="text-sm text-muted-foreground">
                     {taskConfigs.size < 3 
                       ? `Need ${3 - taskConfigs.size} more` 
-                      : '✓ Ready to continue'}
+                      : `${Math.floor(TOTAL_DAILY_POINTS / taskConfigs.size)} pts each`}
                   </span>
                 </div>
 
-                {/* Quick Select Option */}
-                <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
-                  <CardContent className="py-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <Sparkles className="w-8 h-8 text-primary" />
-                        <div>
-                          <p className="font-medium">Quick Start</p>
-                          <p className="text-sm text-muted-foreground">Select 5 recommended tasks instantly</p>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          if (!groupedTemplates) return;
-                          const allTemplates = Object.values(groupedTemplates).flat();
-                          const recommended = allTemplates.filter(t => 
-                            RECOMMENDED_TASK_NAMES.some(name => t.name.includes(name))
-                          );
-                          
-                          const newConfigs = new Map(taskConfigs);
-                          recommended.forEach(template => {
-                            if (!newConfigs.has(template.id)) {
-                              const baseConfig = getInitialConfig(template);
-                              if (difficulty) {
-                                const difficultyOverrides = applyDifficultyToConfig(
-                                  template.scoring_type,
-                                  template.default_config as Record<string, any>,
-                                  difficulty
-                                );
-                                newConfigs.set(template.id, { ...baseConfig, ...difficultyOverrides });
-                              } else {
-                                newConfigs.set(template.id, baseConfig);
-                              }
-                            }
-                          });
-                          setTaskConfigs(newConfigs);
-                          toast.success(`Selected ${recommended.length} recommended tasks!`);
-                        }}
-                        className="shrink-0"
-                      >
-                        Use Recommended
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <DifficultyPresets selected={difficulty} onSelect={handleDifficultyChange} />
+                {/* Difficulty Quick Start */}
+                <DifficultyQuickStart onSelect={handleQuickStart} />
 
                 {tasksLoading ? (
                   <div className="text-center py-8 text-muted-foreground">Loading tasks...</div>
@@ -425,6 +381,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     selectedTasks={taskConfigs}
                     onToggleTask={handleToggleTask}
                     onUpdateConfig={handleUpdateConfig}
+                    onClearAll={handleClearAll}
                     minRequired={3}
                   />
                 )}
@@ -461,46 +418,31 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     <Check className="w-8 h-8 text-primary" />
                   </div>
                   <h3 className="text-xl font-display font-bold">League Created!</h3>
-                  <p className="text-muted-foreground">Share this code with friends to invite them</p>
+                  <p className="text-muted-foreground">Invite your friends to join the competition</p>
                 </div>
 
-                <Card className="border-primary/30 bg-primary/5">
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <p className="text-sm text-muted-foreground mb-2">Invite Code</p>
-                      <p className="text-3xl font-display font-bold tracking-wider text-primary uppercase">
-                        {createdLeague?.invite_code || '...'}
-                      </p>
+                {createdLeague?.invite_code && (
+                  <div className="bg-card border border-border rounded-xl p-6 text-center">
+                    <p className="text-sm text-muted-foreground mb-2">Invite Code</p>
+                    <p className="text-3xl font-mono font-bold tracking-wider text-primary">
+                      {createdLeague.invite_code}
+                    </p>
+                    <div className="flex gap-2 mt-4 justify-center">
+                      <Button variant="outline" onClick={copyInviteCode}>
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy
+                      </Button>
+                      <Button variant="outline" onClick={shareInvite}>
+                        <Share2 className="w-4 h-4 mr-2" />
+                        Share
+                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={copyInviteCode}
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copy Code
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={shareInvite}
-                  >
-                    <Share2 className="w-4 h-4 mr-2" />
-                    Share
-                  </Button>
-                </div>
-
-                <div className="text-center text-sm text-muted-foreground">
-                  <Users className="w-4 h-4 inline mr-1" />
-                  Need at least 4 members to start the season
-                </div>
+                  </div>
+                )}
 
                 <Button onClick={finishSetup} className="w-full" size="lg">
                   Go to League
+                  <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </motion.div>
             )}

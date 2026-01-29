@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Sparkles, Zap, Loader2 } from 'lucide-react';
+import { Check, Zap, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { useTaskTemplatesByCategory, TaskTemplate } from '@/hooks/useTaskTemplates';
 import { useConfigureSeasonTasks } from '@/hooks/useLeagues';
 import { useStartSeason } from '@/hooks/useSeasonActions';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
 import { TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
+import { DifficultyQuickStart, QuickStartDifficulty, DIFFICULTY_PRESETS } from './DifficultyQuickStart';
 import { toast } from 'sonner';
 
 const RECOMMENDED_TASK_NAMES = [
@@ -18,6 +18,8 @@ const RECOMMENDED_TASK_NAMES = [
   'Journaling',
   'Wake Time',
 ];
+
+const TOTAL_DAILY_POINTS = 100;
 
 interface InitialTaskSetupDialogProps {
   open: boolean;
@@ -33,10 +35,32 @@ export function InitialTaskSetupDialog({
   onComplete,
 }: InitialTaskSetupDialogProps) {
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
+  const prevTaskCount = useRef(0);
   
   const { groupedTemplates, isLoading: templatesLoading } = useTaskTemplatesByCategory();
   const configureTasks = useConfigureSeasonTasks();
   const startSeason = useStartSeason();
+
+  // Auto-update points when task count changes
+  useEffect(() => {
+    if (taskConfigs.size > 0 && taskConfigs.size !== prevTaskCount.current) {
+      const evenPointsPerTask = Math.floor(TOTAL_DAILY_POINTS / taskConfigs.size);
+      
+      setTaskConfigs((prev) => {
+        const newMap = new Map(prev);
+        newMap.forEach((config, taskId) => {
+          newMap.set(taskId, {
+            ...config,
+            binary_points: evenPointsPerTask,
+            points: evenPointsPerTask,
+          });
+        });
+        return newMap;
+      });
+      
+      prevTaskCount.current = taskConfigs.size;
+    }
+  }, [taskConfigs.size]);
 
   const handleToggleTask = (taskId: string, template: TaskTemplate) => {
     setTaskConfigs((prev) => {
@@ -58,21 +82,29 @@ export function InitialTaskSetupDialog({
     });
   };
 
-  const handleQuickSelect = () => {
+  const handleClearAll = () => {
+    setTaskConfigs(new Map());
+    prevTaskCount.current = 0;
+  };
+
+  const handleQuickStart = (difficulty: QuickStartDifficulty) => {
     if (!groupedTemplates) return;
-    const allTemplates = Object.values(groupedTemplates).flat();
-    const recommended = allTemplates.filter(t => 
-      RECOMMENDED_TASK_NAMES.some(name => t.name.includes(name))
-    );
     
-    const newConfigs = new Map(taskConfigs);
-    recommended.forEach(template => {
-      if (!newConfigs.has(template.id)) {
-        newConfigs.set(template.id, getInitialConfig(template));
+    const allTemplates = Object.values(groupedTemplates).flat();
+    const preset = DIFFICULTY_PRESETS[difficulty];
+    const newConfigs = new Map<string, TaskConfigOverrides>();
+    
+    RECOMMENDED_TASK_NAMES.forEach((taskName) => {
+      const template = allTemplates.find(t => t.name.includes(taskName));
+      if (template) {
+        const baseConfig = getInitialConfig(template);
+        const presetValues = preset.values[taskName as keyof typeof preset.values];
+        newConfigs.set(template.id, { ...baseConfig, ...presetValues });
       }
     });
+    
     setTaskConfigs(newConfigs);
-    toast.success(`Selected ${recommended.length} recommended tasks!`);
+    toast.success(`Selected ${newConfigs.size} tasks with ${preset.label} settings!`);
   };
 
   const handleStartSeason = async () => {
@@ -93,6 +125,7 @@ export function InitialTaskSetupDialog({
           ...(config.target && { target: config.target }),
           ...(config.points && { points: config.points }),
           ...(config.binary_points && { binary_points: config.binary_points }),
+          ...(config.max_tiers && { max_tiers: config.max_tiers }),
         },
       }));
 
@@ -143,32 +176,12 @@ export function InitialTaskSetupDialog({
             <span className="text-sm text-muted-foreground">
               {taskConfigs.size < 3 
                 ? `Need ${3 - taskConfigs.size} more` 
-                : '✓ Ready to start'}
+                : `${Math.floor(TOTAL_DAILY_POINTS / taskConfigs.size)} pts each`}
             </span>
           </div>
 
-          {/* Quick Select */}
-          <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
-            <CardContent className="py-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <Sparkles className="w-8 h-8 text-primary" />
-                  <div>
-                    <p className="font-medium">Quick Start</p>
-                    <p className="text-sm text-muted-foreground">Select 5 recommended tasks instantly</p>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleQuickSelect}
-                  className="shrink-0"
-                >
-                  Use Recommended
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Difficulty Quick Start */}
+          <DifficultyQuickStart onSelect={handleQuickStart} />
 
           {/* Task Grid */}
           {templatesLoading ? (
@@ -182,6 +195,7 @@ export function InitialTaskSetupDialog({
               selectedTasks={taskConfigs}
               onToggleTask={handleToggleTask}
               onUpdateConfig={handleUpdateConfig}
+              onClearAll={handleClearAll}
               minRequired={3}
             />
           )}

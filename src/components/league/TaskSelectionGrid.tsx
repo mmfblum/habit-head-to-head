@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Activity, Brain, Moon, BookOpen, Dumbbell, Heart, Users, Sparkles } from 'lucide-react';
+import { Check, Activity, Brain, Moon, BookOpen, Dumbbell, Heart, Users, Sparkles, X } from 'lucide-react';
 import { TaskTemplate } from '@/hooks/useTaskTemplates';
-import { Badge } from '@/components/ui/badge';
-import { TaskConfigurationPanel, TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
+import { Button } from '@/components/ui/button';
+import { TaskConfigurationPanel, TaskConfigOverrides } from './TaskConfigurationPanel';
+import { getConfiguredTaskName } from '@/lib/taskNaming';
 
 interface TaskSelectionGridProps {
   groupedTemplates: Record<string, TaskTemplate[]>;
   selectedTasks: Map<string, TaskConfigOverrides>;
   onToggleTask: (taskId: string, template: TaskTemplate) => void;
   onUpdateConfig: (taskId: string, config: TaskConfigOverrides) => void;
+  onClearAll?: () => void;
   minRequired?: number;
 }
 
@@ -37,29 +39,53 @@ const categoryColors: Record<string, string> = {
   custom: 'bg-accent/20 text-accent',
 };
 
-const scoringTypeLabels: Record<string, string> = {
-  binary_yesno: 'Yes/No',
-  linear_per_unit: 'Per Unit',
-  threshold: 'Goal',
-  time_before: 'Before Time',
-  time_after: 'After Time',
-  tiered: 'Tiered',
-  diminishing: 'Diminishing',
-};
-
 export function TaskSelectionGrid({
   groupedTemplates,
   selectedTasks,
   onToggleTask,
   onUpdateConfig,
+  onClearAll,
   minRequired = 0,
 }: TaskSelectionGridProps) {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const categories = Object.keys(groupedTemplates);
   const needsMore = minRequired > 0 && selectedTasks.size < minRequired;
 
+  const handleTaskClick = (taskId: string, template: TaskTemplate) => {
+    const wasSelected = selectedTasks.has(taskId);
+    onToggleTask(taskId, template);
+    
+    // Auto-expand if newly selected
+    if (!wasSelected) {
+      setExpandedTask(taskId);
+    } else {
+      // If deselecting the currently expanded task, collapse it
+      if (expandedTask === taskId) {
+        setExpandedTask(null);
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Clear All Button */}
+      {selectedTasks.size > 0 && onClearAll && (
+        <div className="flex justify-end">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => {
+              onClearAll();
+              setExpandedTask(null);
+            }}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <X className="w-4 h-4 mr-1" />
+            Clear All
+          </Button>
+        </div>
+      )}
+
       {categories.map((category) => {
         const Icon = categoryIcons[category] || Activity;
         const tasks = groupedTemplates[category];
@@ -78,6 +104,11 @@ export function TaskSelectionGrid({
                 const config = selectedTasks.get(task.id);
                 const isExpanded = expandedTask === task.id;
 
+                // Get display name based on config
+                const displayName = isSelected && config 
+                  ? getConfiguredTaskName(task, config) 
+                  : task.name;
+
                 return (
                   <motion.div
                     key={task.id}
@@ -92,7 +123,7 @@ export function TaskSelectionGrid({
                   >
                     <button
                       type="button"
-                      onClick={() => onToggleTask(task.id, task)}
+                      onClick={() => handleTaskClick(task.id, task)}
                       className="w-full text-left"
                     >
                       {isSelected && (
@@ -110,38 +141,12 @@ export function TaskSelectionGrid({
                           <Icon className="w-4 h-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate pr-6">{task.name}</p>
+                          <p className="font-medium truncate pr-6">{displayName}</p>
                           {task.description && (
                             <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                               {task.description}
                             </p>
                           )}
-                          <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            <Badge variant="outline" className="text-xs">
-                              {config?.scoring_mode === 'binary' 
-                                ? 'Yes/No' 
-                                : scoringTypeLabels[task.scoring_type] || task.scoring_type}
-                            </Badge>
-                            {config?.scoring_mode === 'detailed' && (
-                              <>
-                                {config?.target_time && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {config.target_time}
-                                  </Badge>
-                                )}
-                                {config?.threshold && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {config.threshold} min
-                                  </Badge>
-                                )}
-                                {config?.target && !config?.threshold && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {config.target.toLocaleString()} goal
-                                  </Badge>
-                                )}
-                              </>
-                            )}
-                          </div>
                         </div>
                       </div>
                     </button>

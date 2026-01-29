@@ -4,11 +4,11 @@ import { TaskTemplate } from '@/hooks/useTaskTemplates';
 import {
   TimeConfigInput,
   ThresholdConfigInput,
-  ScoringModeToggle,
   PointsConfigInput,
   ScoringPreview,
-  type ScoringMode,
 } from './config-inputs';
+import { ScoringModePrompt, type ScoringMode } from './ScoringModePrompt';
+import { TaskValueInput } from './TaskValueInput';
 
 export interface TaskConfigOverrides {
   scoring_mode: ScoringMode;
@@ -17,6 +17,7 @@ export interface TaskConfigOverrides {
   target?: number;
   points?: number;
   binary_points?: number;
+  max_tiers?: number;
 }
 
 interface TaskConfigurationPanelProps {
@@ -39,8 +40,9 @@ function getDefaultConfig(template: TaskTemplate): TaskConfigOverrides {
     target_time: defaultConfig?.target_time || '06:30',
     threshold: defaultConfig?.threshold || 30,
     target: defaultConfig?.target || 10,
-    points: defaultConfig?.points_on_time || defaultConfig?.points_at_threshold || defaultConfig?.max_points || 50,
-    binary_points: defaultConfig?.binary_points || 3,
+    points: defaultConfig?.points_on_time || defaultConfig?.points_at_threshold || defaultConfig?.max_points || 20,
+    binary_points: defaultConfig?.binary_points || 20,
+    max_tiers: defaultConfig?.max_tiers || 5,
   };
 }
 
@@ -86,6 +88,29 @@ export function TaskConfigurationPanel({
     onChange({ ...config, ...updates });
   };
 
+  // Render simple mode config (value commitment + points)
+  const renderSimpleModeConfig = () => {
+    return (
+      <div className="space-y-4">
+        <TaskValueInput
+          template={template}
+          value={config.target || config.threshold}
+          onChange={(value) => {
+            // Update both target and threshold to ensure naming works
+            updateConfig({ target: value, threshold: value });
+          }}
+        />
+        <PointsConfigInput
+          label="Points per completion"
+          description="Points awarded when you complete this task"
+          value={config.binary_points || 20}
+          onChange={(value) => updateConfig({ binary_points: value })}
+          max={100}
+        />
+      </div>
+    );
+  };
+
   // Render detailed configuration based on scoring type
   const renderDetailedConfig = () => {
     switch (template.scoring_type) {
@@ -103,11 +128,14 @@ export function TaskConfigurationPanel({
               value={config.target_time || defaultConfig?.target_time || '06:30'}
               onChange={(value) => updateConfig({ target_time: value })}
             />
-            <PointsConfigInput
-              label="Points for success"
-              value={config.points || defaultConfig?.points_on_time || 50}
-              onChange={(value) => updateConfig({ points: value })}
-              max={100}
+            <ThresholdConfigInput
+              label="Max Tiers"
+              description="Each tier = 30 min increment. 1 point per tier."
+              value={config.max_tiers || 5}
+              onChange={(value) => updateConfig({ max_tiers: value })}
+              unit="tiers"
+              min={1}
+              max={20}
             />
           </div>
         );
@@ -126,7 +154,7 @@ export function TaskConfigurationPanel({
             />
             <PointsConfigInput
               label="Points when completed"
-              value={config.points || defaultConfig?.points_at_threshold || 50}
+              value={config.points || defaultConfig?.points_at_threshold || 20}
               onChange={(value) => updateConfig({ points: value })}
               max={100}
             />
@@ -145,12 +173,14 @@ export function TaskConfigurationPanel({
               min={1}
               max={100000}
             />
-            <PointsConfigInput
-              label="Max points"
-              description="Maximum points earnable per day"
-              value={config.points || defaultConfig?.max_points || 50}
-              onChange={(value) => updateConfig({ points: value })}
-              max={100}
+            <ThresholdConfigInput
+              label="Max Tiers"
+              description="Each tier = portion of goal. 1 point per tier."
+              value={config.max_tiers || 5}
+              onChange={(value) => updateConfig({ max_tiers: value })}
+              unit="tiers"
+              min={1}
+              max={20}
             />
           </div>
         );
@@ -161,11 +191,14 @@ export function TaskConfigurationPanel({
             <p className="text-sm text-muted-foreground">
               Points awarded based on tiers. Lower values = more points.
             </p>
-            <PointsConfigInput
-              label="Max points (best tier)"
-              value={config.points || 50}
-              onChange={(value) => updateConfig({ points: value })}
-              max={100}
+            <ThresholdConfigInput
+              label="Max Tiers"
+              description="Number of scoring tiers (1 point per tier)"
+              value={config.max_tiers || 5}
+              onChange={(value) => updateConfig({ max_tiers: value })}
+              unit="tiers"
+              min={1}
+              max={20}
             />
           </div>
         );
@@ -200,20 +233,14 @@ export function TaskConfigurationPanel({
           >
             <div className="pt-4 space-y-4">
               {canToggleMode && (
-                <ScoringModeToggle
+                <ScoringModePrompt
                   value={config.scoring_mode}
                   onChange={(mode) => updateConfig({ scoring_mode: mode })}
                 />
               )}
 
               {config.scoring_mode === 'binary' ? (
-                <PointsConfigInput
-                  label="Points per completion"
-                  description="Points awarded for completing this task"
-                  value={config.binary_points || defaultConfig?.binary_points || 3}
-                  onChange={(value) => updateConfig({ binary_points: value })}
-                  max={50}
-                />
+                renderSimpleModeConfig()
               ) : (
                 renderDetailedConfig()
               )}
