@@ -48,12 +48,58 @@ export function StatsGrid({ stats }: StatsGridProps) {
   );
 }
 
-export function QuickStats() {
+interface QuickStatsProps {
+  rank?: number;
+  totalMembers?: number;
+  weeklyScore?: number;
+  streak?: number;
+  seasonPoints?: number;
+  weekNumber?: number;
+  weeksCount?: number;
+}
+
+export function QuickStats(props?: QuickStatsProps) {
+  // Format large numbers with commas
+  const formatNumber = (num: number) => num.toLocaleString();
+  
+  // Use real data if provided, otherwise use mock defaults
+  const rank = props?.rank ?? 2;
+  const totalMembers = props?.totalMembers ?? 6;
+  const weeklyScore = props?.weeklyScore ?? 847;
+  const streak = props?.streak ?? 3;
+  const seasonPoints = props?.seasonPoints ?? 3420;
+  const weekNumber = props?.weekNumber ?? 5;
+  const weeksCount = props?.weeksCount ?? 8;
+
   const stats: Stat[] = [
-    { icon: Trophy, label: 'Season Rank', value: '#2', subtext: 'of 6 players', color: 'primary' },
-    { icon: Target, label: 'Weekly Score', value: '847', subtext: '+55 from tasks', color: 'secondary' },
-    { icon: Flame, label: 'Win Streak', value: '3', subtext: 'Personal best: 5', color: 'streak' },
-    { icon: TrendingUp, label: 'Season Pts', value: '3,420', subtext: 'Week 5 of 8', color: 'accent' },
+    { 
+      icon: Trophy, 
+      label: 'Season Rank', 
+      value: `#${rank}`, 
+      subtext: `of ${totalMembers} players`, 
+      color: 'primary' 
+    },
+    { 
+      icon: Target, 
+      label: 'Weekly Score', 
+      value: formatNumber(weeklyScore), 
+      subtext: '+55 from tasks', 
+      color: 'secondary' 
+    },
+    { 
+      icon: Flame, 
+      label: 'Win Streak', 
+      value: streak, 
+      subtext: 'Personal best: 5', 
+      color: 'streak' 
+    },
+    { 
+      icon: TrendingUp, 
+      label: 'Season Pts', 
+      value: formatNumber(seasonPoints), 
+      subtext: `Week ${weekNumber} of ${weeksCount}`, 
+      color: 'accent' 
+    },
   ];
 
   return <StatsGrid stats={stats} />;
