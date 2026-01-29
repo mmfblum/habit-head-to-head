@@ -1,16 +1,52 @@
 import { motion } from 'framer-motion';
-import { currentUser, leagueMembers } from '@/lib/mockData';
-import { Settings, Trophy, Target, Flame, Calendar, ChevronRight, LogOut, Bell, Shield } from 'lucide-react';
+import { Settings, Trophy, Target, Flame, Calendar, ChevronRight, LogOut, Bell, Shield, Trash2, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
+import { useIsLeagueAdmin } from '@/hooks/useLeagueTaskConfigs';
+import { useState } from 'react';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { useDeleteLeague, useLeaveLeague } from '@/hooks/useLeagueActions';
 
 export default function Profile() {
-  const seasonProgress = (currentUser.wins / (currentUser.wins + currentUser.losses)) * 100;
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const { data: league, leagueId } = useUserPrimaryLeague();
+  const { data: isAdmin } = useIsLeagueAdmin(leagueId);
+  const deleteLeague = useDeleteLeague();
+  const leaveLeague = useLeaveLeague();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+
+  // Find current user's standing in the league
+  const currentUserStanding = league?.members?.find(m => m.user_id === user?.id);
+  const wins = currentUserStanding?.wins || 0;
+  const losses = currentUserStanding?.losses || 0;
+  const streak = currentUserStanding?.current_streak || 0;
+  const totalPoints = currentUserStanding?.total_points || 0;
+  const weeklyPoints = currentUserStanding?.weekly_points || 0;
+  const rank = currentUserStanding?.current_rank || 0;
+  const displayName = currentUserStanding?.display_name || user?.email?.split('@')[0] || 'User';
+
+  const seasonProgress = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
 
   const stats = [
-    { label: 'Season Wins', value: currentUser.wins, icon: Trophy, color: 'text-primary' },
-    { label: 'Season Losses', value: currentUser.losses, icon: Target, color: 'text-loss' },
-    { label: 'Best Streak', value: 5, icon: Flame, color: 'text-streak' },
-    { label: 'Seasons Played', value: 3, icon: Calendar, color: 'text-secondary' },
+    { label: 'Season Wins', value: wins, icon: Trophy, color: 'text-primary' },
+    { label: 'Season Losses', value: losses, icon: Target, color: 'text-loss' },
+    { label: 'Streak', value: streak, icon: Flame, color: 'text-streak' },
+    { label: 'Rank', value: rank || '-', icon: Calendar, color: 'text-secondary' },
   ];
 
   const menuItems = [
@@ -18,6 +54,43 @@ export default function Profile() {
     { label: 'Privacy & Security', icon: Shield },
     { label: 'Settings', icon: Settings },
   ];
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast.success('Signed out successfully');
+      navigate('/auth');
+    } catch (error) {
+      toast.error('Failed to sign out');
+    }
+  };
+
+  const handleDeleteLeague = async () => {
+    if (!leagueId) return;
+    
+    try {
+      await deleteLeague.mutateAsync(leagueId);
+      setShowDeleteDialog(false);
+      navigate('/');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete league');
+    }
+  };
+
+  const handleLeaveLeague = async () => {
+    if (!leagueId) return;
+    
+    try {
+      await leaveLeague.mutateAsync(leagueId);
+      setShowLeaveDialog(false);
+      navigate('/');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to leave league');
+    }
+  };
+
+  // Generate avatar from display name
+  const avatarEmoji = displayName ? '👤' : '🎮';
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -34,25 +107,28 @@ export default function Profile() {
             animate={{ scale: 1 }}
             className="w-24 h-24 rounded-3xl bg-primary/20 flex items-center justify-center text-5xl mx-auto mb-4 ring-4 ring-primary/30"
           >
-            {currentUser.avatar}
+            {avatarEmoji}
           </motion.div>
           
-          <h1 className="font-display font-bold text-2xl">{currentUser.username}</h1>
-          <p className="text-muted-foreground text-sm">Rank #{currentUser.rank} in Productivity Pros</p>
+          <h1 className="font-display font-bold text-2xl">{displayName}</h1>
+          <p className="text-muted-foreground text-sm">
+            {rank > 0 ? `Rank #${rank}` : 'No rank yet'} 
+            {league?.name ? ` in ${league.name}` : ''}
+          </p>
           
           {/* Season record */}
           <div className="flex items-center justify-center gap-4 mt-4">
             <div className="win-badge">
               <Trophy className="w-3 h-3" />
-              {currentUser.wins} Wins
+              {wins} Wins
             </div>
             <div className="loss-badge">
-              {currentUser.losses} Losses
+              {losses} Losses
             </div>
-            {currentUser.streak > 0 && (
+            {streak > 0 && (
               <div className="streak-badge">
                 <Flame className="w-3 h-3" />
-                {currentUser.streak} Streak
+                {streak} Streak
               </div>
             )}
           </div>
@@ -67,8 +143,13 @@ export default function Profile() {
           className="card-elevated rounded-2xl p-4"
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display font-semibold">Season 3 Stats</h2>
-            <span className="text-xs text-muted-foreground">Week 5 of 8</span>
+            <h2 className="font-display font-semibold">
+              {league?.current_season ? `Season ${league.current_season.season_number} Stats` : 'Season Stats'}
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              {league?.current_week ? `Week ${league.current_week.week_number}` : ''}
+              {league?.current_season ? ` of ${league.current_season.weeks_count}` : ''}
+            </span>
           </div>
           
           {/* Win rate progress */}
@@ -104,9 +185,9 @@ export default function Profile() {
         >
           <div className="text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Season Points</p>
-            <p className="score-text text-4xl gradient-text">{currentUser.seasonScore.toLocaleString()}</p>
+            <p className="score-text text-4xl gradient-text">{Math.round(totalPoints).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              +{currentUser.weeklyScore} this week
+              +{Math.round(weeklyPoints)} this week
             </p>
           </div>
         </motion.section>
@@ -128,7 +209,7 @@ export default function Profile() {
               <div
                 key={i}
                 className={`flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
-                  i < 4 ? 'bg-primary/20 ring-1 ring-primary/30' : 'bg-muted opacity-40'
+                  i < Math.min(wins, 4) ? 'bg-primary/20 ring-1 ring-primary/30' : 'bg-muted opacity-40'
                 }`}
               >
                 {emoji}
@@ -157,8 +238,99 @@ export default function Profile() {
           })}
         </section>
 
+        {/* League Management Section */}
+        {league && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-2"
+          >
+            <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">
+              League
+            </h2>
+            
+            {isAdmin ? (
+              <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialogTrigger asChild>
+                  <button
+                    className="w-full flex items-center gap-3 p-4 rounded-xl border border-loss/30 text-loss hover:bg-loss/10 transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    <span className="flex-1 text-left font-medium">Delete League</span>
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete League?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete "{league.name}" and all associated data including seasons, tasks, and check-ins for all members.
+                      <br /><br />
+                      <strong>This action cannot be undone.</strong>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDeleteLeague}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={deleteLeague.isPending}
+                    >
+                      {deleteLeague.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        'Delete League'
+                      )}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
+                <AlertDialogTrigger asChild>
+                  <button
+                    className="w-full flex items-center gap-3 p-4 rounded-xl border border-loss/30 text-loss hover:bg-loss/10 transition-colors"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    <span className="flex-1 text-left font-medium">Leave League</span>
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Leave League?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to leave "{league.name}"? Your progress and check-ins will be preserved, but you won't be able to participate until you rejoin.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleLeaveLeague}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={leaveLeague.isPending}
+                    >
+                      {leaveLeague.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Leaving...
+                        </>
+                      ) : (
+                        'Leave League'
+                      )}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </motion.section>
+        )}
+
         {/* Logout */}
         <motion.button
+          onClick={handleSignOut}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.35 }}
