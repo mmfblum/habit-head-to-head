@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Copy, Share2, Trophy, Users, Zap } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Share2, Trophy, Users, Zap, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,14 @@ import { TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel'
 import { DifficultyPresets, DifficultyLevel, applyDifficultyToConfig, difficultyConfigs } from './DifficultyPresets';
 
 type WizardStep = 'details' | 'tasks' | 'invite';
+
+const RECOMMENDED_TASK_NAMES = [
+  'Steps',
+  'Workout',
+  'Reading',
+  'Journaling',
+  'Wake Time',
+];
 
 interface LeagueFormData {
   name: string;
@@ -336,9 +344,76 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   <Zap className="w-12 h-12 text-secondary mx-auto mb-3" />
                   <h3 className="text-xl font-display font-bold">Select & Configure Tasks</h3>
                   <p className="text-muted-foreground">
-                    Choose tasks and customize targets for your league ({taskConfigs.size} selected)
+                    Choose at least 3 tasks for your league members to track daily
                   </p>
                 </div>
+
+                {/* Selection Counter */}
+                <div className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors ${
+                  taskConfigs.size >= 3 
+                    ? 'bg-primary/10 border-primary/30' 
+                    : 'bg-muted/50 border-border'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Selected: {taskConfigs.size}</span>
+                    {taskConfigs.size >= 3 && (
+                      <Check className="w-4 h-4 text-primary" />
+                    )}
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {taskConfigs.size < 3 
+                      ? `Need ${3 - taskConfigs.size} more` 
+                      : '✓ Ready to continue'}
+                  </span>
+                </div>
+
+                {/* Quick Select Option */}
+                <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="w-8 h-8 text-primary" />
+                        <div>
+                          <p className="font-medium">Quick Start</p>
+                          <p className="text-sm text-muted-foreground">Select 5 recommended tasks instantly</p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          if (!groupedTemplates) return;
+                          const allTemplates = Object.values(groupedTemplates).flat();
+                          const recommended = allTemplates.filter(t => 
+                            RECOMMENDED_TASK_NAMES.some(name => t.name.includes(name))
+                          );
+                          
+                          const newConfigs = new Map(taskConfigs);
+                          recommended.forEach(template => {
+                            if (!newConfigs.has(template.id)) {
+                              const baseConfig = getInitialConfig(template);
+                              if (difficulty) {
+                                const difficultyOverrides = applyDifficultyToConfig(
+                                  template.scoring_type,
+                                  template.default_config as Record<string, any>,
+                                  difficulty
+                                );
+                                newConfigs.set(template.id, { ...baseConfig, ...difficultyOverrides });
+                              } else {
+                                newConfigs.set(template.id, baseConfig);
+                              }
+                            }
+                          });
+                          setTaskConfigs(newConfigs);
+                          toast.success(`Selected ${recommended.length} recommended tasks!`);
+                        }}
+                        className="shrink-0"
+                      >
+                        Use Recommended
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 <DifficultyPresets selected={difficulty} onSelect={handleDifficultyChange} />
 
@@ -350,6 +425,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     selectedTasks={taskConfigs}
                     onToggleTask={handleToggleTask}
                     onUpdateConfig={handleUpdateConfig}
+                    minRequired={3}
                   />
                 )}
 
@@ -363,6 +439,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     {configureTasks.isPending || startSeason.isPending ? 'Setting up...' : `Continue with ${taskConfigs.size} tasks`}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
+                  {taskConfigs.size < 3 && (
+                    <p className="text-center text-sm text-muted-foreground mt-2">
+                      Select at least 3 tasks to continue
+                    </p>
+                  )}
                 </div>
               </motion.div>
             )}

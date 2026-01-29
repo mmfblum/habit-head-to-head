@@ -10,6 +10,7 @@ interface TaskSelectionGridProps {
   selectedTasks: Map<string, TaskConfigOverrides>;
   onToggleTask: (taskId: string, template: TaskTemplate) => void;
   onUpdateConfig: (taskId: string, config: TaskConfigOverrides) => void;
+  minRequired?: number;
 }
 
 const categoryIcons: Record<string, React.ElementType> = {
@@ -51,9 +52,11 @@ export function TaskSelectionGrid({
   selectedTasks,
   onToggleTask,
   onUpdateConfig,
+  minRequired = 0,
 }: TaskSelectionGridProps) {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const categories = Object.keys(groupedTemplates);
+  const needsMore = minRequired > 0 && selectedTasks.size < minRequired;
 
   return (
     <div className="space-y-6">
@@ -81,7 +84,9 @@ export function TaskSelectionGrid({
                     className={`relative p-4 rounded-xl border-2 transition-all ${
                       isSelected
                         ? 'border-primary bg-primary/10'
-                        : 'border-border bg-card hover:border-muted-foreground/30'
+                        : needsMore 
+                          ? 'border-border bg-card hover:border-primary/50 animate-pulse-subtle'
+                          : 'border-border bg-card hover:border-muted-foreground/30'
                     }`}
                     layout
                   >
