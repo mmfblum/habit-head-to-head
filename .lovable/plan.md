@@ -1,208 +1,180 @@
 
-# Plan: Hybrid Dashboard - Mock Data Fallback with Real League Data
+# Plan: Improve Task Configuration Experience in League Creation
 
 ## Overview
-Update the Dashboard to show real league data when a user has created/joined a league, while falling back to mock data for users who haven't yet created a league. This gives new users a preview of what the app looks like while providing real data for active users.
+The current league creation wizard has a task configuration step (Step 2), but users are not completing it successfully. We need to make the task selection more intuitive and add a fallback path for leagues that were created without configured tasks.
 
-## Current State
-- Dashboard imports all data from `mockData.ts`
-- Shows fictional opponent "Alex K." and fake league "Productivity Pros"
-- Real data hooks (`useUserPrimaryLeague`, `useTasksWithCheckins`) exist but are unused on Dashboard
+## Problem Analysis
+- Users complete Step 1 (league details) but don't finish Step 2 (tasks)
+- Database shows multiple leagues with `task_count: 0` and `status: draft`
+- The current UI requires selecting 3+ tasks before proceeding, but this may not be clear
 
 ## Implementation Strategy
 
-### Conditional Data Loading
-```text
-Dashboard
-    │
-    ├── useUserPrimaryLeague()
-    │       │
-    │       ├── Has League? ──Yes──> Show Real Data
-    │       │                         • Real league name/week/season
-    │       │                         • Real members as matchup opponent  
-    │       │                         • Real tasks from useTasksWithCheckins
-    │       │                         • Real stats from member standings
-    │       │
-    │       └── No League? ──────> Show Mock Data (current behavior)
-    │                               • Demo league info
-    │                               • Sample matchup with Alex K.
-    │                               • Sample tasks
+### Step 1: Enhance Task Selection UI in CreateLeagueWizard
+Make it clearer that users must select tasks:
+
+**Changes to `CreateLeagueWizard.tsx`:**
+- Add a prominent selection counter showing "0 of 3 minimum selected"
+- Show visual feedback when tasks are selected (animation, color change)
+- Add quick-select presets: "Recommended Tasks" button that auto-selects 5 popular tasks
+- Add a progress indicator within the task section
+
+### Step 2: Add Quick-Select Preset Feature
+Add a one-click option to select recommended tasks:
+
+**New component behavior:**
 ```
+┌─────────────────────────────────────────┐
+│ Quick Start: Select 5 recommended tasks │
+│           [ Use Recommended ]           │
+│                  or                     │
+│        Choose individual tasks:         │
+└─────────────────────────────────────────┘
+```
+
+This helps users who feel overwhelmed by choices.
+
+### Step 3: Add "Configure Tasks" Prompt on League Page
+For leagues with draft seasons and no tasks, show a setup prompt:
+
+**Changes to `League.tsx`:**
+- When season status is `draft` AND `task_count === 0`, show a "Complete Setup" card
+- Include a button that opens the ManageTasksDialog or a simplified task picker
+- Add a "Start Season" button once tasks are configured
+
+### Step 4: Create Simplified Initial Task Setup Dialog
+A focused dialog for first-time task configuration:
+
+**New component: `InitialTaskSetupDialog.tsx`:**
+- Simpler than ManageTasksDialog - focused on first selection
+- Shows categories with checkboxes
+- Has "Recommended" preset button
+- After selecting 3+ tasks, enables "Start Season" action
+- Combines task config + season activation in one flow
+
+### Step 5: Update Season Activation Flow
+Ensure season can be started from the League page:
+
+**Changes:**
+- Add `useStartSeason` call after task configuration in InitialTaskSetupDialog
+- Show clear feedback when season is activated
+- Refresh league data to show active state
 
 ---
 
 ## Detailed Changes
 
-### Step 1: Update Dashboard.tsx - Add Data Hooks
+### File: `src/components/league/CreateLeagueWizard.tsx`
 
-Import and use real data hooks alongside mock data:
-
+**Add quick-select button:**
 ```tsx
-import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
-import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
-import { useAuth } from '@/hooks/useAuth';
+const RECOMMENDED_TASK_NAMES = [
+  'Steps',
+  'Workout',
+  'Reading',
+  'Journaling',
+  'Wake Time',
+];
 
-// Fetch real data
-const { data: leagueDetails, isLoading } = useUserPrimaryLeague();
-const { user } = useAuth();
-
-// Determine if we should show real or mock data
-const hasLeague = !!leagueDetails;
+const handleQuickSelect = () => {
+  if (!groupedTemplates) return;
+  const allTemplates = Object.values(groupedTemplates).flat();
+  const recommended = allTemplates.filter(t => 
+    RECOMMENDED_TASK_NAMES.some(name => t.name.includes(name))
+  );
+  
+  const newConfigs = new Map(taskConfigs);
+  recommended.forEach(template => {
+    if (!newConfigs.has(template.id)) {
+      newConfigs.set(template.id, getInitialConfig(template));
+    }
+  });
+  setTaskConfigs(newConfigs);
+};
 ```
 
-### Step 2: Create Data Transformation Layer
-
-Build helper functions to transform real league data into the mock data format (so existing components work):
-
-**League Info:**
+**Add visual counter:**
 ```tsx
-const displayLeague = hasLeague ? {
-  name: leagueDetails.name,
-  week: leagueDetails.current_week?.week_number ?? 1,
-  season: leagueDetails.current_season?.season_number ?? 1,
-} : currentLeague; // mock fallback
+<div className="flex items-center justify-between mb-4 p-3 rounded-lg bg-primary/10">
+  <span className="font-medium">Selected: {taskConfigs.size}</span>
+  <span className="text-sm text-muted-foreground">
+    {taskConfigs.size < 3 
+      ? `Need ${3 - taskConfigs.size} more` 
+      : '✓ Ready to continue'}
+  </span>
+</div>
 ```
 
-**User & Opponent:**
-```tsx
-const currentMember = leagueDetails?.members.find(m => m.user_id === user?.id);
-const opponentMember = leagueDetails?.members.find(m => m.user_id !== user?.id);
+### File: `src/pages/League.tsx`
 
-const displayUser = hasLeague && currentMember ? {
-  id: currentMember.user_id,
-  username: 'You',
-  avatar: currentMember.avatar_url ? '👤' : '🏆',
-  weeklyScore: currentMember.weekly_points,
-  seasonScore: currentMember.total_points,
-  wins: currentMember.wins,
-  losses: currentMember.losses,
-  streak: currentMember.current_streak,
-  rank: currentMember.current_rank ?? 1,
-} : currentUser; // mock fallback
+**Add setup prompt for unconfigured leagues:**
+```tsx
+// After the "no season" check, add check for draft season with no tasks
+{currentSeason?.status === 'draft' && (
+  <SetupPromptCard 
+    onConfigureTasks={() => setShowInitialSetup(true)}
+    seasonId={currentSeason.id}
+  />
+)}
 ```
 
-**Matchup:**
-```tsx
-const displayMatchup = hasLeague && opponentMember ? {
-  id: 'real-matchup',
-  week: leagueDetails.current_week?.week_number ?? 1,
-  user: displayUser,
-  opponent: displayOpponent,
-  userScore: currentMember?.weekly_points ?? 0,
-  opponentScore: opponentMember?.weekly_points ?? 0,
-  status: 'in_progress' as const,
-} : currentMatchup; // mock fallback
-```
+### New File: `src/components/league/InitialTaskSetupDialog.tsx`
 
-### Step 3: Integrate Real Tasks
+A simplified dialog for first-time setup:
+- Shows task templates in a grid with checkboxes
+- "Select Recommended" button for quick setup
+- "Configure & Start Season" button at bottom
+- Handles both task configuration AND season activation
 
-Fetch real tasks when a league exists:
+### File: `src/components/league/TaskSelectionGrid.tsx`
 
-```tsx
-const seasonId = leagueDetails?.current_season?.id;
-const { data: realTasks = [] } = useTasksWithCheckins(seasonId, new Date());
-
-// Transform real tasks to mock format for TaskCard compatibility
-const transformedTasks = realTasks.map(task => ({
-  id: task.id,
-  name: task.task_name,
-  icon: TASK_ICONS[task.template?.icon ?? 'activity'] ?? '📊',
-  description: task.template?.description ?? '',
-  type: 'custom' as const,
-  target: (task.config as any)?.target ?? 1,
-  unit: task.template?.unit ?? '',
-  pointsPerUnit: 1,
-  maxPoints: (task.config as any)?.max_points ?? 100,
-  currentValue: task.todayCheckin?.numeric_value ?? 
-                (task.todayCheckin?.boolean_value ? 1 : 0) ?? 0,
-  completed: !!task.todayCheckin?.boolean_value || 
-             (task.todayCheckin?.numeric_value ?? 0) >= ((task.config as any)?.target ?? 1),
-  streakDays: 0, // Would need separate query for streak data
-}));
-
-const displayTasks = hasLeague && transformedTasks.length > 0 
-  ? transformedTasks 
-  : tasks; // mock fallback
-```
-
-### Step 4: Update QuickStats Component
-
-Modify `QuickStats` to accept optional real stats:
-
-```tsx
-// In StatsGrid.tsx
-interface QuickStatsProps {
-  rank?: number;
-  totalMembers?: number;
-  weeklyScore?: number;
-  streak?: number;
-  seasonPoints?: number;
-  weekNumber?: number;
-  weeksCount?: number;
-}
-
-export function QuickStats(props?: QuickStatsProps) {
-  const stats: Stat[] = [
-    { 
-      icon: Trophy, 
-      label: 'Season Rank', 
-      value: props?.rank ? `#${props.rank}` : '#2', 
-      subtext: `of ${props?.totalMembers ?? 6} players`, 
-      color: 'primary' 
-    },
-    // ... similar for other stats
-  ];
-  return <StatsGrid stats={stats} />;
-}
-```
-
-### Step 5: Handle Loading & Edge Cases
-
-Add loading skeleton and handle single-member leagues:
-
-```tsx
-if (isLoading) {
-  return <DashboardSkeleton />;
-}
-
-// If only one member, show invite prompt instead of matchup
-const showMatchup = !hasLeague || (leagueDetails.members.length > 1);
-```
+**Improve visual feedback:**
+- Add pulse animation to unselected tasks when count < 3
+- Show clearer selected state with checkmark badge
 
 ---
 
-## Files to Modify
+## Files to Create/Modify
 
-| File | Changes |
-|------|---------|
-| `src/pages/Dashboard.tsx` | Add hooks, conditional data loading, transformations |
-| `src/components/StatsGrid.tsx` | Update `QuickStats` to accept optional props |
+| File | Action | Description |
+|------|--------|-------------|
+| `src/components/league/CreateLeagueWizard.tsx` | Modify | Add quick-select button, selection counter |
+| `src/pages/League.tsx` | Modify | Add setup prompt for unconfigured leagues |
+| `src/components/league/InitialTaskSetupDialog.tsx` | Create | New simplified task setup dialog |
+| `src/components/league/TaskSelectionGrid.tsx` | Modify | Improve visual feedback |
 
 ---
 
-## Technical Details
+## Technical Considerations
 
-### Data Flow
-1. Dashboard loads and calls `useUserPrimaryLeague()`
-2. If user has a league membership, fetch real league details
-3. Transform real data to match mock data interfaces
-4. Pass to existing components (MatchupCard, TaskCard, QuickStats)
-5. If no league exists, use mock data as fallback
+### Data Flow for Initial Setup
+```
+League Page (draft season, no tasks)
+    │
+    ├── Show "Complete Setup" prompt
+    │
+    └── Open InitialTaskSetupDialog
+            │
+            ├── User selects 3+ tasks
+            │
+            ├── Call useConfigureSeasonTasks()
+            │
+            ├── Call useStartSeason()
+            │
+            └── Close dialog, refresh league data
+```
 
-### Type Safety
-All transformations will maintain the existing mock data types (`User`, `Matchup`, `Task`, `League`) so no changes needed to `MatchupCard` or `TaskCard` components.
-
-### Edge Cases Handled
-- **No league**: Shows mock/demo data
-- **League but no season**: Shows league name, prompts to start season
-- **Single member**: Shows "Invite opponents" instead of matchup
-- **No tasks configured**: Falls back to mock tasks
-- **Loading state**: Shows skeleton UI
+### Edge Cases
+- **User has existing draft season**: Show setup prompt
+- **User refreshes during setup**: Season stays draft, can retry
+- **Quick-select finds fewer tasks**: Fall back to manual selection
 
 ---
 
 ## Expected Outcome
-- New users see a polished demo dashboard with mock data
-- Once a league is created, the dashboard switches to real data
-- Real league name, actual opponent (or invite prompt), real task progress
-- Stats reflect actual season rankings and weekly scores
+1. New league creation flow is clearer with "Select Recommended" option
+2. Users who skip task configuration see a prominent "Complete Setup" card
+3. One-click recommended task selection reduces decision fatigue
+4. Season activation happens automatically after task configuration
+5. No leagues left in limbo with draft status and no tasks
