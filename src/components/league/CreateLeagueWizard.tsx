@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
 import { TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
 import { DifficultyQuickStart, QuickStartDifficulty, DIFFICULTY_PRESETS } from './DifficultyQuickStart';
+import { TaskSummaryPreview } from './TaskSummaryPreview';
 
 type WizardStep = 'details' | 'tasks' | 'invite';
 
@@ -383,6 +384,15 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     onUpdateConfig={handleUpdateConfig}
                     onClearAll={handleClearAll}
                     minRequired={3}
+                  />
+                )}
+
+                {/* Task Summary Preview */}
+                {taskConfigs.size >= 3 && groupedTemplates && (
+                  <TaskSummaryPreview
+                    templates={Object.values(groupedTemplates).flat()}
+                    configs={taskConfigs}
+                    totalPoints={TOTAL_DAILY_POINTS}
                   />
                 )}
 
