@@ -9,6 +9,7 @@ import { useStartSeason } from '@/hooks/useSeasonActions';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
 import { TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
 import { DifficultyQuickStart, QuickStartDifficulty, DIFFICULTY_PRESETS } from './DifficultyQuickStart';
+import { TaskSummaryPreview } from './TaskSummaryPreview';
 import { toast } from 'sonner';
 
 const RECOMMENDED_TASK_NAMES = [
@@ -197,6 +198,15 @@ export function InitialTaskSetupDialog({
               onUpdateConfig={handleUpdateConfig}
               onClearAll={handleClearAll}
               minRequired={3}
+            />
+          )}
+
+          {/* Task Summary Preview */}
+          {taskConfigs.size >= 3 && groupedTemplates && (
+            <TaskSummaryPreview
+              templates={Object.values(groupedTemplates).flat()}
+              configs={taskConfigs}
+              totalPoints={TOTAL_DAILY_POINTS}
             />
           )}
         </div>
