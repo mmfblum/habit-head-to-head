@@ -4,16 +4,24 @@ import { LeaderboardRow } from '@/components/LeaderboardRow';
 import { useUserPrimaryLeague, LeagueMemberWithProfile } from '@/hooks/useLeagueDetails';
 import { useIsLeagueAdmin } from '@/hooks/useLeagueTaskConfigs';
 import { useAuth } from '@/hooks/useAuth';
-import { Trophy, Share2, Settings, Skull, Crown, Swords, Loader2 } from 'lucide-react';
+import { Trophy, Share2, Settings, Skull, Crown, Swords, Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { ManageTasksDialog } from '@/components/league/ManageTasksDialog';
+import { InitialTaskSetupDialog } from '@/components/league/InitialTaskSetupDialog';
+import { useLeagueTaskConfigs } from '@/hooks/useLeagueTaskConfigs';
 import { format, addDays, startOfWeek, nextMonday } from 'date-fns';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 export default function League() {
   const { user } = useAuth();
   const { data: league, isLoading, error, leagueId } = useUserPrimaryLeague();
   const { data: isAdmin } = useIsLeagueAdmin(leagueId);
   const [showManageTasks, setShowManageTasks] = useState(false);
+  const [showInitialSetup, setShowInitialSetup] = useState(false);
+  
+  // Fetch task configs to check if season has tasks
+  const { data: taskConfigs } = useLeagueTaskConfigs(league?.current_season?.id);
 
   if (isLoading) {
     return (
@@ -185,6 +193,28 @@ export default function League() {
           </motion.section>
         )}
 
+        {/* Draft season with no tasks - show setup prompt */}
+        {currentSeason?.status === 'draft' && isAdmin && (taskConfigs?.filter(c => c.is_enabled).length ?? 0) === 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Card className="border-2 border-dashed border-primary/50 bg-primary/5">
+              <CardContent className="py-6 text-center">
+                <Zap className="w-12 h-12 text-primary mx-auto mb-4" />
+                <h3 className="font-display font-bold text-lg mb-2">Complete Your League Setup</h3>
+                <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+                  Your league is almost ready! Configure the tasks your members will track daily, then start the season.
+                </p>
+                <Button onClick={() => setShowInitialSetup(true)} size="lg">
+                  <Zap className="w-4 h-4 mr-2" />
+                  Configure Tasks & Start Season
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.section>
+        )}
+
         {/* Leaderboard */}
         <section>
           <div className="flex items-center gap-2 mb-3">
@@ -253,12 +283,19 @@ export default function League() {
 
       {/* Manage Tasks Dialog for Admins */}
       {currentSeason && (
-        <ManageTasksDialog
-          open={showManageTasks}
-          onOpenChange={setShowManageTasks}
-          seasonId={currentSeason.id}
-          nextWeekStart={nextWeekStart}
-        />
+        <>
+          <ManageTasksDialog
+            open={showManageTasks}
+            onOpenChange={setShowManageTasks}
+            seasonId={currentSeason.id}
+            nextWeekStart={nextWeekStart}
+          />
+          <InitialTaskSetupDialog
+            open={showInitialSetup}
+            onOpenChange={setShowInitialSetup}
+            seasonId={currentSeason.id}
+          />
+        </>
       )}
     </div>
   );
