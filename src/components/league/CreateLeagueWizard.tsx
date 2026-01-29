@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { useCreateLeague, useCreateSeason, useConfigureSeasonTasks } from '@/hooks/useLeagues';
+import { useStartSeason } from '@/hooks/useSeasonActions';
 import { useTaskTemplatesByCategory, TaskTemplate } from '@/hooks/useTaskTemplates';
 import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
@@ -40,6 +41,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const createLeague = useCreateLeague();
   const createSeason = useCreateSeason();
   const configureTasks = useConfigureSeasonTasks();
+  const startSeason = useStartSeason();
 
   const handleDetailsSubmit = async () => {
     if (!formData.name.trim()) {
@@ -158,8 +160,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
         taskConfigs: taskConfigArray,
       });
 
+      // Activate the season to trigger task instance generation
+      await startSeason.mutateAsync(createdSeason.id);
+
       setStep('invite');
-      toast.success('Tasks configured!');
+      toast.success('Tasks configured and season started!');
     } catch (error) {
       toast.error('Failed to configure tasks');
     }
@@ -353,9 +358,9 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     onClick={handleTasksSubmit}
                     className="w-full"
                     size="lg"
-                    disabled={taskConfigs.size < 3 || configureTasks.isPending}
+                    disabled={taskConfigs.size < 3 || configureTasks.isPending || startSeason.isPending}
                   >
-                    {configureTasks.isPending ? 'Saving...' : `Continue with ${taskConfigs.size} tasks`}
+                    {configureTasks.isPending || startSeason.isPending ? 'Setting up...' : `Continue with ${taskConfigs.size} tasks`}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
