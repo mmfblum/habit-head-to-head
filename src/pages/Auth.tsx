@@ -196,7 +196,7 @@ export default function Auth() {
         >
           <div className="flex items-center justify-center gap-2 mb-2">
             <Trophy className="w-10 h-10 text-primary" />
-            <h1 className="text-3xl font-display font-bold gradient-text">ProGrind</h1>
+            <h1 className="text-3xl font-display font-bold gradient-text">Zrizin</h1>
           </div>
         </motion.div>
 
@@ -288,7 +288,7 @@ export default function Auth() {
         >
           <div className="flex items-center justify-center gap-2 mb-2">
             <Trophy className="w-10 h-10 text-primary" />
-            <h1 className="text-3xl font-display font-bold gradient-text">ProGrind</h1>
+            <h1 className="text-3xl font-display font-bold gradient-text">Zrizin</h1>
           </div>
         </motion.div>
 
@@ -349,7 +349,7 @@ export default function Auth() {
         >
           <div className="flex items-center justify-center gap-2 mb-2">
             <Trophy className="w-10 h-10 text-primary" />
-            <h1 className="text-3xl font-display font-bold gradient-text">ProGrind</h1>
+            <h1 className="text-3xl font-display font-bold gradient-text">Zrizin</h1>
           </div>
         </motion.div>
 
@@ -407,7 +407,7 @@ export default function Auth() {
       >
         <div className="flex items-center justify-center gap-2 mb-2">
           <Trophy className="w-10 h-10 text-primary" />
-          <h1 className="text-3xl font-display font-bold gradient-text">ProGrind</h1>
+          <h1 className="text-3xl font-display font-bold gradient-text">Zrizin</h1>
         </div>
         <p className="text-muted-foreground">Fantasy football for productivity</p>
       </motion.div>

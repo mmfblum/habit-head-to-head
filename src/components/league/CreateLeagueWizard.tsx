@@ -193,7 +193,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     if (createdLeague?.invite_code && navigator.share) {
       try {
         await navigator.share({
-          title: `Join ${formData.name} on ProGrind`,
+          title: `Join ${formData.name} on Zrizin`,
           text: `Use invite code: ${createdLeague.invite_code}`,
           url: window.location.origin,
         });

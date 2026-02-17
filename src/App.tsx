@@ -10,6 +10,8 @@ import Tasks from "./pages/Tasks";
 import League from "./pages/League";
 import Matchup from "./pages/Matchup";
 import Profile from "./pages/Profile";
+import Feed from "./pages/Feed";
+import Notifications from "./pages/Notifications";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
@@ -113,6 +115,24 @@ function AppRoutes() {
               <LeagueGate>
                 <Matchup />
               </LeagueGate>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/feed"
+          element={
+            <ProtectedRoute>
+              <LeagueGate>
+                <Feed />
+              </LeagueGate>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
             </ProtectedRoute>
           }
         />

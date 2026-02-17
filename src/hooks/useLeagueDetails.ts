@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getLocalISODate } from '@/lib/date';
 import { useAuth } from './useAuth';
 
 export interface LeagueMemberWithProfile {
@@ -83,7 +84,7 @@ export function useLeagueDetails(leagueId?: string) {
       // 3. Fetch current week if we have an active season
       let currentWeek = null;
       if (currentSeason) {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalISODate();
         const { data: weeks, error: weeksError } = await supabase
           .from('weeks')
           .select('*')

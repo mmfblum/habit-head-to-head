@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { burstConfetti } from '@/lib/confetti';
 import { cn } from '@/lib/utils';
 import { CONFIRMATION_LABELS } from '@/lib/verification';
 

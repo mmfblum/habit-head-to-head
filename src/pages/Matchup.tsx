@@ -7,6 +7,7 @@ import { PowerUpButton } from '@/components/matchup/PowerUpSelector';
 import { useMatchupActivity, useMatchupScores } from '@/hooks/useMatchupActivity';
 import { useTaskBreakdown } from '@/hooks/useTaskBreakdown';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
+import { useDailyMatchupNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -69,7 +70,9 @@ export default function Matchup() {
   const scoreDiff = Math.abs(userScore - opponentScore);
 
   if (isLoading) {
-    return (
+    useDailyMatchupNotifications({ leagueId: leagueDetails?.league?.id, opponentName: opponentMember?.display_name ?? 'Opponent', scoreLine: null, swingTasks: ['Steps', 'Workout'] });
+
+  return (
       <div className="min-h-screen bg-background pb-24">
         <div className="p-4 space-y-4">
           <Skeleton className="h-48 w-full rounded-xl" />
@@ -81,7 +84,9 @@ export default function Matchup() {
   }
 
   if (!currentWeek || !opponent) {
-    return (
+    useDailyMatchupNotifications({ leagueId: leagueDetails?.league?.id, opponentName: opponentMember?.display_name ?? 'Opponent', scoreLine: null, swingTasks: ['Steps', 'Workout'] });
+
+  return (
       <div className="min-h-screen bg-background pb-24 flex items-center justify-center">
         <div className="text-center p-8">
           <div className="text-5xl mb-4">🏟️</div>
@@ -93,6 +98,8 @@ export default function Matchup() {
       </div>
     );
   }
+
+  useDailyMatchupNotifications({ leagueId: leagueDetails?.league?.id, opponentName: opponentMember?.display_name ?? 'Opponent', scoreLine: null, swingTasks: ['Steps', 'Workout'] });
 
   return (
     <div className="min-h-screen bg-background pb-24">
