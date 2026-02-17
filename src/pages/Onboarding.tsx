@@ -22,7 +22,7 @@ export default function Onboarding() {
         className="text-center mb-8"
       >
         <Trophy className="w-16 h-16 text-primary mx-auto mb-4" />
-        <h1 className="text-3xl font-display font-bold mb-2">Welcome to ProGrind</h1>
+        <h1 className="text-3xl font-display font-bold mb-2">Welcome to Zrizin</h1>
         <p className="text-muted-foreground max-w-md">
           Join or create a league to start competing with friends on daily productivity tasks
         </p>

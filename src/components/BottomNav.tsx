@@ -1,11 +1,13 @@
-import { Home, Target, Trophy, Users, User } from 'lucide-react';
+import { Home, Target, Trophy, Users, User, Bell, MessageSquare } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
   { icon: Target, label: 'Tasks', path: '/tasks' },
+  { icon: MessageSquare, label: 'Feed', path: '/feed' },
   { icon: Trophy, label: 'League', path: '/league' },
   { icon: Users, label: 'Matchup', path: '/matchup' },
+  { icon: Bell, label: 'Alerts', path: '/notifications' },
   { icon: User, label: 'Profile', path: '/profile' },
 ];
 
