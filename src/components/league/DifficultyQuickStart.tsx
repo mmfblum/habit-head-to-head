@@ -30,7 +30,7 @@ export const DIFFICULTY_PRESETS: Record<QuickStartDifficulty, {
       'Workout': { threshold: 20 },
       'Reading': { threshold: 15 },
       'Steps': { target: 5000 },
-      'Journaling': { binary_points: 20 },
+      'Journaling': { binary_points: 10 },
     },
   },
   medium: {
@@ -42,7 +42,7 @@ export const DIFFICULTY_PRESETS: Record<QuickStartDifficulty, {
       'Workout': { threshold: 30 },
       'Reading': { threshold: 20 },
       'Steps': { target: 8000 },
-      'Journaling': { binary_points: 20 },
+      'Journaling': { binary_points: 10 },
     },
   },
   extreme: {
@@ -54,7 +54,7 @@ export const DIFFICULTY_PRESETS: Record<QuickStartDifficulty, {
       'Workout': { threshold: 45 },
       'Reading': { threshold: 30 },
       'Steps': { target: 12000 },
-      'Journaling': { binary_points: 20 },
+      'Journaling': { binary_points: 10 },
     },
   },
 };

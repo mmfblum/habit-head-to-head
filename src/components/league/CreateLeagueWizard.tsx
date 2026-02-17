@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronLeft, ChevronRight, Copy, Share2, Trophy, Users, Zap } from 'lucide-react';
@@ -25,7 +25,7 @@ const RECOMMENDED_TASK_NAMES = [
   'Wake Time',
 ];
 
-const TOTAL_DAILY_POINTS = 100;
+const POINTS_PER_TASK = 10;
 
 interface LeagueFormData {
   name: string;
@@ -44,34 +44,12 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
   const [createdLeague, setCreatedLeague] = useState<{ id: string; invite_code: string | null } | null>(null);
   const [createdSeason, setCreatedSeason] = useState<{ id: string } | null>(null);
-  const prevTaskCount = useRef(0);
 
-  const { groupedTemplates, isLoading: tasksLoading } = useTaskTemplatesByCategory();
   const createLeague = useCreateLeague();
   const createSeason = useCreateSeason();
   const configureTasks = useConfigureSeasonTasks();
   const startSeason = useStartSeason();
-
-  // Auto-update points when task count changes
-  useEffect(() => {
-    if (taskConfigs.size > 0 && taskConfigs.size !== prevTaskCount.current) {
-      const evenPointsPerTask = Math.floor(TOTAL_DAILY_POINTS / taskConfigs.size);
-      
-      setTaskConfigs((prev) => {
-        const newMap = new Map(prev);
-        newMap.forEach((config, taskId) => {
-          newMap.set(taskId, {
-            ...config,
-            binary_points: evenPointsPerTask,
-            points: evenPointsPerTask,
-          });
-        });
-        return newMap;
-      });
-      
-      prevTaskCount.current = taskConfigs.size;
-    }
-  }, [taskConfigs.size]);
+  const { groupedTemplates, isLoading: tasksLoading } = useTaskTemplatesByCategory();
 
   const handleDetailsSubmit = async () => {
     if (!formData.name.trim()) {
@@ -122,7 +100,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
   const handleClearAll = () => {
     setTaskConfigs(new Map());
-    prevTaskCount.current = 0;
+    setTaskConfigs(new Map());
   };
 
   const handleQuickStart = (difficulty: QuickStartDifficulty) => {
@@ -367,7 +345,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   <span className="text-sm text-muted-foreground">
                     {taskConfigs.size < 3 
                       ? `Need ${3 - taskConfigs.size} more` 
-                      : `${Math.floor(TOTAL_DAILY_POINTS / taskConfigs.size)} pts each`}
+                      : `${taskConfigs.size * POINTS_PER_TASK} pts total`}
                   </span>
                 </div>
 
@@ -392,7 +370,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   <TaskSummaryPreview
                     templates={Object.values(groupedTemplates).flat()}
                     configs={taskConfigs}
-                    totalPoints={TOTAL_DAILY_POINTS}
+                    totalPoints={taskConfigs.size * POINTS_PER_TASK}
                   />
                 )}
 

@@ -40,8 +40,8 @@ function getDefaultConfig(template: TaskTemplate): TaskConfigOverrides {
     target_time: defaultConfig?.target_time || '06:30',
     threshold: defaultConfig?.threshold || 30,
     target: defaultConfig?.target || 10,
-    points: defaultConfig?.points_on_time || defaultConfig?.points_at_threshold || defaultConfig?.max_points || 20,
-    binary_points: defaultConfig?.binary_points || 20,
+    points: 10,
+    binary_points: 10,
     max_tiers: defaultConfig?.max_tiers || 5,
   };
 }
@@ -100,13 +100,6 @@ export function TaskConfigurationPanel({
             updateConfig({ target: value, threshold: value });
           }}
         />
-        <PointsConfigInput
-          label="Points per completion"
-          description="Points awarded when you complete this task"
-          value={config.binary_points || 20}
-          onChange={(value) => updateConfig({ binary_points: value })}
-          max={100}
-        />
       </div>
     );
   };
@@ -151,12 +144,6 @@ export function TaskConfigurationPanel({
               unit={getUnitLabel(template)}
               min={1}
               max={999}
-            />
-            <PointsConfigInput
-              label="Points when completed"
-              value={config.points || defaultConfig?.points_at_threshold || 20}
-              onChange={(value) => updateConfig({ points: value })}
-              max={100}
             />
           </div>
         );

@@ -60,7 +60,7 @@ export function TaskSummaryPreview({ templates, configs, totalPoints }: TaskSumm
                 </Badge>
                 <Badge className="text-xs bg-primary/20 text-primary hover:bg-primary/20">
                   <Zap className="w-3 h-3 mr-1" />
-                  {isBinary ? config.binary_points : config.points || pointsPerTask} pts
+                  10 pts
                 </Badge>
               </div>
             </div>

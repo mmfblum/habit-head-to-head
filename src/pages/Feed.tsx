@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function Feed() {
   const { data: league } = useUserPrimaryLeague();
-  const leagueId = league?.league.id;
+  const leagueId = league?.id;
 
   const { data, isLoading } = useQuery({
     queryKey: ['league-events', leagueId],

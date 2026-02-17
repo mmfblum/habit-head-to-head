@@ -69,10 +69,16 @@ export default function Matchup() {
   const isWinning = userScore > opponentScore;
   const scoreDiff = Math.abs(userScore - opponentScore);
 
-  if (isLoading) {
-    useDailyMatchupNotifications({ leagueId: leagueDetails?.league?.id, opponentName: opponentMember?.display_name ?? 'Opponent', scoreLine: null, swingTasks: ['Steps', 'Workout'] });
+  // Always call hooks before conditional returns (React rules of hooks)
+  useDailyMatchupNotifications({
+    leagueId: leagueDetails?.id,
+    opponentName: opponent?.display_name ?? 'Opponent',
+    scoreLine: null,
+    swingTasks: ['Steps', 'Workout'],
+  });
 
-  return (
+  if (isLoading) {
+    return (
       <div className="min-h-screen bg-background pb-24">
         <div className="p-4 space-y-4">
           <Skeleton className="h-48 w-full rounded-xl" />
@@ -84,9 +90,7 @@ export default function Matchup() {
   }
 
   if (!currentWeek || !opponent) {
-    useDailyMatchupNotifications({ leagueId: leagueDetails?.league?.id, opponentName: opponentMember?.display_name ?? 'Opponent', scoreLine: null, swingTasks: ['Steps', 'Workout'] });
-
-  return (
+    return (
       <div className="min-h-screen bg-background pb-24 flex items-center justify-center">
         <div className="text-center p-8">
           <div className="text-5xl mb-4">🏟️</div>
@@ -98,8 +102,6 @@ export default function Matchup() {
       </div>
     );
   }
-
-  useDailyMatchupNotifications({ leagueId: leagueDetails?.league?.id, opponentName: opponentMember?.display_name ?? 'Opponent', scoreLine: null, swingTasks: ['Steps', 'Workout'] });
 
   return (
     <div className="min-h-screen bg-background pb-24">
