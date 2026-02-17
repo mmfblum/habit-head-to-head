@@ -66,7 +66,7 @@ function generateExamples(template: TaskTemplate, config: TaskConfigOverrides): 
 
   // Binary mode - simple examples
   if (config.scoring_mode === 'binary') {
-    const points = config.binary_points || defaultConfig?.binary_points || 3;
+    const points = 10;
     return [
       { scenario: 'Completed', points },
       { scenario: 'Not completed', points: 0 },

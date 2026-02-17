@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Zap, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -20,7 +20,7 @@ const RECOMMENDED_TASK_NAMES = [
   'Wake Time',
 ];
 
-const TOTAL_DAILY_POINTS = 100;
+const POINTS_PER_TASK = 10;
 
 interface InitialTaskSetupDialogProps {
   open: boolean;
@@ -36,32 +36,10 @@ export function InitialTaskSetupDialog({
   onComplete,
 }: InitialTaskSetupDialogProps) {
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
-  const prevTaskCount = useRef(0);
-  
+
   const { groupedTemplates, isLoading: templatesLoading } = useTaskTemplatesByCategory();
   const configureTasks = useConfigureSeasonTasks();
   const startSeason = useStartSeason();
-
-  // Auto-update points when task count changes
-  useEffect(() => {
-    if (taskConfigs.size > 0 && taskConfigs.size !== prevTaskCount.current) {
-      const evenPointsPerTask = Math.floor(TOTAL_DAILY_POINTS / taskConfigs.size);
-      
-      setTaskConfigs((prev) => {
-        const newMap = new Map(prev);
-        newMap.forEach((config, taskId) => {
-          newMap.set(taskId, {
-            ...config,
-            binary_points: evenPointsPerTask,
-            points: evenPointsPerTask,
-          });
-        });
-        return newMap;
-      });
-      
-      prevTaskCount.current = taskConfigs.size;
-    }
-  }, [taskConfigs.size]);
 
   const handleToggleTask = (taskId: string, template: TaskTemplate) => {
     setTaskConfigs((prev) => {
@@ -85,7 +63,7 @@ export function InitialTaskSetupDialog({
 
   const handleClearAll = () => {
     setTaskConfigs(new Map());
-    prevTaskCount.current = 0;
+    setTaskConfigs(new Map());
   };
 
   const handleQuickStart = (difficulty: QuickStartDifficulty) => {
@@ -177,7 +155,7 @@ export function InitialTaskSetupDialog({
             <span className="text-sm text-muted-foreground">
               {taskConfigs.size < 3 
                 ? `Need ${3 - taskConfigs.size} more` 
-                : `${Math.floor(TOTAL_DAILY_POINTS / taskConfigs.size)} pts each`}
+                : `${taskConfigs.size * POINTS_PER_TASK} pts total`}
             </span>
           </div>
 
@@ -206,7 +184,7 @@ export function InitialTaskSetupDialog({
             <TaskSummaryPreview
               templates={Object.values(groupedTemplates).flat()}
               configs={taskConfigs}
-              totalPoints={TOTAL_DAILY_POINTS}
+              totalPoints={taskConfigs.size * POINTS_PER_TASK}
             />
           )}
         </div>
