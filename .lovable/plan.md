@@ -1,33 +1,47 @@
 
 
-# Fix Email Sign-Up
+# Make Zrizin an Installable Web App (PWA)
 
-## The Problem
+This will let users on iPhone and Android add Zrizin to their home screen so it looks and feels like a native app -- full-screen, with an app icon, splash screen, and offline fallback.
 
-During earlier testing, **auto-confirm email** was enabled so test accounts could work instantly. This means:
-- No confirmation emails are ever sent to new users
-- Your account (mmfblum@gmail.com) already exists and is confirmed -- you just need to sign in, not sign up
-- Any new signups are also auto-confirmed without email delivery
+## What you'll get
 
-## The Fix
+- An "Add to Home Screen" prompt on Android (automatic) and iPhone (via Share > Add to Home Screen)
+- Full-screen app experience with no browser address bar
+- A custom app icon and splash screen
+- Basic offline support (shows a friendly message if there's no internet)
 
-### Step 1: Disable auto-confirm emails
+## What needs to be created
 
-Turn off auto-confirm so that new users must verify their email before they can log in. This restores the confirmation email flow that the app already has UI for (the "Check Your Email" screen).
+### 1. Web App Manifest (`public/manifest.json`)
+A JSON file that tells the browser about your app -- its name, icon, theme color, and how it should launch. This is the core of any PWA.
 
-### Step 2: Handle the built-in email service limitations
+### 2. App Icons
+Multiple sizes of the Zrizin icon for different devices:
+- 192x192 and 512x512 PNG icons (required minimums)
+- We'll generate simple placeholder icons using SVG for now. You can replace them with your real logo later.
 
-The built-in email service has strict rate limits (about 3-4 emails per hour). For a production app, this means:
-- A few signups per hour will work fine
-- If you expect higher volume, you would need to configure a custom email provider (like Resend, SendGrid, or Mailgun) later
+### 3. Service Worker (`public/sw.js`)
+A small script that runs in the background enabling:
+- Caching of core app files for faster loads
+- A basic offline fallback page
 
-### What this means for you
+### 4. Register the Service Worker (`src/main.tsx`)
+A few lines of code to activate the service worker when the app loads.
 
-- **Your existing account** (mmfblum@gmail.com): Already confirmed. Just sign in with your password on the published site.
-- **New users signing up**: Will receive a confirmation email and must click the link before they can log in.
-- **The "Check Your Email" screen**: Will work as designed, showing new users instructions to verify.
+### 5. Update `index.html`
+Add references to the manifest, theme color, and Apple-specific meta tags for iPhone support.
 
-### Files changed
+## Technical Details
 
-No code changes needed -- this is a backend configuration change only.
+### Files to create:
+- `public/manifest.json` -- PWA manifest with app name "Zrizin", dark theme color (#0a0f1a), standalone display mode
+- `public/sw.js` -- Service worker with cache-first strategy for static assets and network-first for API calls
+- `public/icon-192.svg` and `public/icon-512.svg` -- Placeholder app icons
+
+### Files to modify:
+- `index.html` -- Add `<link rel="manifest">`, Apple meta tags (`apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`), and theme-color meta tag
+- `src/main.tsx` -- Register the service worker on app startup
+
+### No backend changes needed.
 
