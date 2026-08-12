@@ -54,9 +54,6 @@ export function useLeagueDetails(leagueId?: string) {
     queryFn: async (): Promise<LeagueDetails | null> => {
       if (!leagueId) return null;
 
-      // Advance the fantasy-week lifecycle before reading standings. The RPC is
-      // idempotent: past games close, the current slate becomes live, and ranks
-      // are recomputed. Cast here until generated Supabase types are refreshed.
       const { error: lifecycleError } = await (supabase as any).rpc(
         'refresh_competition_state',
         { _league_id: leagueId }
@@ -98,13 +95,32 @@ export function useLeagueDetails(leagueId?: string) {
         currentWeek = weeks?.[0] || null;
 
         if (!currentWeek) {
-          const { data: latestWeek } = await supabase
+          // Preseason / between scheduled dates: point the UI at the next week,
+          // not the final week of the season. If the season is already over,
+          // fall back to the most recently completed week.
+          const { data: upcomingWeeks, error: upcomingError } = await supabase
             .from('weeks')
             .select('*')
             .eq('season_id', currentSeason.id)
-            .order('week_number', { ascending: false })
+            .gt('start_date', today)
+            .order('week_number', { ascending: true })
             .limit(1);
-          currentWeek = latestWeek?.[0] || null;
+
+          if (upcomingError) throw upcomingError;
+          currentWeek = upcomingWeeks?.[0] || null;
+
+          if (!currentWeek) {
+            const { data: latestWeek, error: latestError } = await supabase
+              .from('weeks')
+              .select('*')
+              .eq('season_id', currentSeason.id)
+              .lt('end_date', today)
+              .order('week_number', { ascending: false })
+              .limit(1);
+
+            if (latestError) throw latestError;
+            currentWeek = latestWeek?.[0] || null;
+          }
         }
       }
 
@@ -186,7 +202,6 @@ export function useLeagueDetails(leagueId?: string) {
         };
       });
 
-      // Fantasy standings are record-first, with season points as a tiebreaker.
       membersWithDetails.sort((a, b) =>
         b.wins - a.wins ||
         b.ties - a.ties ||
