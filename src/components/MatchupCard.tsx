@@ -2,21 +2,38 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Matchup } from '@/lib/mockData';
 import { ChevronRight, Clock, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 
 interface MatchupCardProps {
   matchup: Matchup;
   compact?: boolean;
+  weekStartDate?: string;
   weekEndDate?: string;
   onClick?: () => void;
 }
 
-function getTimeRemaining(endDate?: string) {
+function getClockLabel(status: Matchup['status'], startDate?: string, endDate?: string) {
+  if (status === 'completed') return 'Final';
+
+  if (status === 'upcoming' && startDate) {
+    const start = new Date(`${startDate}T00:00:00`);
+    const diffMs = start.getTime() - Date.now();
+    if (diffMs > 0) {
+      const totalHours = Math.ceil(diffMs / 3_600_000);
+      const days = Math.floor(totalHours / 24);
+      const hours = totalHours % 24;
+      if (days > 0) return `Starts in ${days}d ${hours}h`;
+      return `Starts in ${hours}h`;
+    }
+    return `Starts ${format(parseISO(startDate), 'EEE')}`;
+  }
+
   if (!endDate) return null;
   const end = new Date(`${endDate}T23:59:59`);
   const diffMs = end.getTime() - Date.now();
   if (diffMs <= 0) return 'Final';
 
-  const totalMinutes = Math.floor(diffMs / 60000);
+  const totalMinutes = Math.floor(diffMs / 60_000);
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;
@@ -33,9 +50,9 @@ function Avatar({ value, alt }: { value: string; alt: string }) {
   return <span>{value}</span>;
 }
 
-export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: MatchupCardProps) {
+export function MatchupCard({ matchup, compact = false, weekStartDate, weekEndDate, onClick }: MatchupCardProps) {
   const { user, opponent, userScore, opponentScore, week, status } = matchup;
-  const [timeRemaining, setTimeRemaining] = useState(() => getTimeRemaining(weekEndDate));
+  const [clockLabel, setClockLabel] = useState(() => getClockLabel(status, weekStartDate, weekEndDate));
   const isWinning = userScore > opponentScore;
   const isTied = userScore === opponentScore;
   const scoreDiff = userScore - opponentScore;
@@ -44,15 +61,23 @@ export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: 
   const opponentShare = totalScore > 0 ? (opponentScore / totalScore) * 100 : 50;
 
   useEffect(() => {
-    setTimeRemaining(getTimeRemaining(weekEndDate));
-    if (!weekEndDate) return;
-    const interval = window.setInterval(() => setTimeRemaining(getTimeRemaining(weekEndDate)), 60_000);
+    setClockLabel(getClockLabel(status, weekStartDate, weekEndDate));
+    const interval = window.setInterval(
+      () => setClockLabel(getClockLabel(status, weekStartDate, weekEndDate)),
+      60_000
+    );
     return () => window.clearInterval(interval);
-  }, [weekEndDate]);
+  }, [status, weekStartDate, weekEndDate]);
 
-  const gameMessage = status === 'completed'
-    ? isTied ? 'Matchup tied' : isWinning ? `You won by ${Math.abs(scoreDiff)}` : `Lost by ${Math.abs(scoreDiff)}`
-    : isTied ? 'Dead even' : isWinning ? `You lead by ${Math.abs(scoreDiff)}` : `Down ${Math.abs(scoreDiff)} — game on`;
+  const gameMessage = status === 'upcoming'
+    ? `You vs ${opponent.username}`
+    : status === 'completed'
+      ? isTied ? 'Matchup tied' : isWinning ? `You won by ${Math.abs(scoreDiff)}` : `Lost by ${Math.abs(scoreDiff)}`
+      : isTied ? 'Dead even' : isWinning ? `You lead by ${Math.abs(scoreDiff)}` : `Down ${Math.abs(scoreDiff)} — game on`;
+
+  const subtext = status === 'upcoming'
+    ? weekStartDate ? `Kickoff ${format(parseISO(weekStartDate), 'EEEE')}` : 'Matchup scheduled'
+    : status === 'completed' ? 'Week complete' : 'Every check-in moves the scoreboard';
 
   return (
     <motion.button
@@ -65,21 +90,19 @@ export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: 
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Week {week}
-          </span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Week {week}</span>
           <span className={`stat-badge ${
             status === 'in_progress' ? 'bg-pending/20 text-pending' :
             status === 'completed' ? 'bg-muted text-muted-foreground' :
             'bg-secondary/20 text-secondary'
           }`}>
-            {status === 'in_progress' ? 'Live' : status === 'completed' ? 'Final' : 'Upcoming'}
+            {status === 'in_progress' ? 'Live' : status === 'completed' ? 'Final' : 'Scheduled'}
           </span>
         </div>
-        {timeRemaining && (
+        {clockLabel && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="w-3.5 h-3.5" />
-            <span>{timeRemaining}</span>
+            <span>{clockLabel}</span>
           </div>
         )}
       </div>
@@ -87,13 +110,11 @@ export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: 
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className={`font-display font-bold text-lg ${
-            isWinning ? 'text-primary' : isTied ? '' : 'text-loss'
+            status === 'upcoming' ? 'text-secondary' : isWinning ? 'text-primary' : isTied ? '' : 'text-loss'
           }`}>
             {gameMessage}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {status === 'completed' ? 'Week complete' : 'Every check-in moves the scoreboard'}
-          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">{subtext}</p>
         </div>
         {onClick && <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />}
       </div>
@@ -104,7 +125,7 @@ export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: 
             <Avatar value={user.avatar} alt={user.username} />
           </div>
           <p className="font-semibold text-sm truncate">You</p>
-          <p className={`score-text text-3xl mt-1 ${isWinning ? 'text-primary' : ''}`}>
+          <p className={`score-text text-3xl mt-1 ${status !== 'upcoming' && isWinning ? 'text-primary' : ''}`}>
             {userScore.toLocaleString()}
           </p>
           {!compact && <p className="text-xs text-muted-foreground mt-1">{user.wins}-{user.losses}</p>}
@@ -112,14 +133,14 @@ export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: 
 
         <div className="flex flex-col items-center gap-1">
           <div className={`w-11 h-11 rounded-full flex items-center justify-center ${
-            isWinning ? 'bg-primary/20' : isTied ? 'bg-muted' : 'bg-loss/20'
+            status === 'upcoming' ? 'bg-secondary/15' : isWinning ? 'bg-primary/20' : isTied ? 'bg-muted' : 'bg-loss/20'
           }`}>
-            {isWinning ? <TrendingUp className="w-5 h-5 text-primary" /> : isTied ? <Minus className="w-5 h-5 text-muted-foreground" /> : <TrendingDown className="w-5 h-5 text-loss" />}
+            {status === 'upcoming' ? <Clock className="w-5 h-5 text-secondary" /> : isWinning ? <TrendingUp className="w-5 h-5 text-primary" /> : isTied ? <Minus className="w-5 h-5 text-muted-foreground" /> : <TrendingDown className="w-5 h-5 text-loss" />}
           </div>
           <span className={`text-xs font-bold ${
-            isWinning ? 'text-primary' : isTied ? 'text-muted-foreground' : 'text-loss'
+            status === 'upcoming' ? 'text-secondary' : isWinning ? 'text-primary' : isTied ? 'text-muted-foreground' : 'text-loss'
           }`}>
-            {scoreDiff > 0 ? '+' : ''}{scoreDiff}
+            {status === 'upcoming' ? 'VS' : `${scoreDiff > 0 ? '+' : ''}${scoreDiff}`}
           </span>
         </div>
 
@@ -128,19 +149,21 @@ export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: 
             <Avatar value={opponent.avatar} alt={opponent.username} />
           </div>
           <p className="font-semibold text-sm truncate">{opponent.username}</p>
-          <p className={`score-text text-3xl mt-1 ${!isWinning && !isTied ? 'text-loss' : ''}`}>
+          <p className={`score-text text-3xl mt-1 ${status !== 'upcoming' && !isWinning && !isTied ? 'text-loss' : ''}`}>
             {opponentScore.toLocaleString()}
           </p>
           {!compact && <p className="text-xs text-muted-foreground mt-1">{opponent.wins}-{opponent.losses}</p>}
         </div>
       </div>
 
-      <div className="mt-4">
-        <div className="h-2 bg-muted rounded-full overflow-hidden flex">
-          <motion.div className="bg-gradient-primary" animate={{ width: `${userShare}%` }} transition={{ duration: 0.45, ease: 'easeOut' }} />
-          <motion.div className="bg-loss/60" animate={{ width: `${opponentShare}%` }} transition={{ duration: 0.45, ease: 'easeOut' }} />
+      {status !== 'upcoming' && (
+        <div className="mt-4">
+          <div className="h-2 bg-muted rounded-full overflow-hidden flex">
+            <motion.div className="bg-gradient-primary" animate={{ width: `${userShare}%` }} transition={{ duration: 0.45, ease: 'easeOut' }} />
+            <motion.div className="bg-loss/60" animate={{ width: `${opponentShare}%` }} transition={{ duration: 0.45, ease: 'easeOut' }} />
+          </div>
         </div>
-      </div>
+      )}
     </motion.button>
   );
 }
