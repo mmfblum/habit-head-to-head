@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MessageCircle, TrendingUp, Activity, ListChecks } from 'lucide-react';
+import { toast } from 'sonner';
 import { MatchupScoreboard } from '@/components/matchup/MatchupScoreboard';
 import { ActivityFeed } from '@/components/matchup/ActivityFeed';
 import { TaskBreakdown } from '@/components/matchup/TaskBreakdown';
@@ -10,19 +13,37 @@ import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useDailyMatchupNotifications } from '@/hooks/useNotifications';
 import { useCurrentMatchup } from '@/hooks/useCurrentMatchup';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+const QUICK_TAUNTS = [
+  'Enjoy the lead while it lasts 👀',
+  'Clock’s running. I’m coming for you.',
+  'Hope you saved something for the fourth quarter.',
+  'See you at the finish line. 🏁',
+];
 
 export default function Matchup() {
   const { user: authUser } = useAuth();
+  const queryClient = useQueryClient();
   const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
+  const [tauntOpen, setTauntOpen] = useState(false);
+  const [customTaunt, setCustomTaunt] = useState('');
 
   const currentWeek = leagueDetails?.current_week;
   const members = leagueDetails?.members || [];
   const currentMember = members.find(m => m.user_id === authUser?.id);
 
-  // The schedule is the source of truth for this week's opponent. Never infer
-  // an opponent from member ordering; that breaks in leagues with 3+ members.
   const { data: scheduledMatchup, isLoading: matchupLoading } = useCurrentMatchup(currentWeek?.id);
   const opponentId = scheduledMatchup
     ? scheduledMatchup.user1_id === authUser?.id
@@ -33,10 +54,7 @@ export default function Matchup() {
 
   const userIds = [currentMember?.user_id, opponent?.user_id].filter(Boolean) as string[];
 
-  const { data: scoresMap, isLoading: scoresLoading } = useMatchupScores(
-    currentWeek?.id,
-    userIds
-  );
+  const { data: scoresMap, isLoading: scoresLoading } = useMatchupScores(currentWeek?.id, userIds);
 
   const { data: activityEvents, isLoading: activityLoading, setIsAtTop } = useMatchupActivity({
     weekId: currentWeek?.id,
@@ -53,6 +71,11 @@ export default function Matchup() {
 
   const userScore = scoresMap?.get(currentMember?.user_id || '') || 0;
   const opponentScore = scoresMap?.get(opponent?.user_id || '') || 0;
+  const scoreDiffSigned = userScore - opponentScore;
+  const scoreDiff = Math.abs(scoreDiffSigned);
+  const isWinning = scoreDiffSigned > 0;
+  const isTied = scoreDiffSigned === 0;
+  const isFinal = scheduledMatchup?.status === 'completed';
 
   const userParticipant = {
     id: currentMember?.user_id || '',
@@ -68,16 +91,41 @@ export default function Matchup() {
     score: opponentScore,
   };
 
-  const isLoading = leagueLoading || matchupLoading || scoresLoading;
-  const isWinning = userScore > opponentScore;
-  const scoreDiff = Math.abs(userScore - opponentScore);
+  const swingTasks = [...(taskBreakdown || [])]
+    .sort((a, b) => {
+      const aBehind = a.opponent_points - a.user_points;
+      const bBehind = b.opponent_points - b.user_points;
+      return bBehind - aBehind || b.max_points - a.max_points;
+    })
+    .slice(0, 2)
+    .map(task => task.task_name);
 
   useDailyMatchupNotifications({
     leagueId: leagueDetails?.id,
     opponentName: opponent?.display_name ?? 'Opponent',
-    scoreLine: null,
-    swingTasks: ['Steps', 'Workout'],
+    scoreLine: `${userScore}-${opponentScore} ${isWinning ? 'you lead' : isTied ? 'tied' : 'you trail'}.`,
+    swingTasks,
   });
+
+  const sendTaunt = useMutation({
+    mutationFn: async (body: string) => {
+      if (!scheduledMatchup?.id) throw new Error('No active matchup');
+      const { error } = await (supabase as any).rpc('send_matchup_taunt', {
+        _matchup_id: scheduledMatchup.id,
+        _body: body,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setTauntOpen(false);
+      setCustomTaunt('');
+      toast.success('Taunt sent');
+      queryClient.invalidateQueries({ queryKey: ['league-events', leagueDetails?.id] });
+    },
+    onError: (error: Error) => toast.error(error.message || 'Could not send taunt'),
+  });
+
+  const isLoading = leagueLoading || matchupLoading || scoresLoading;
 
   if (isLoading) {
     return (
@@ -103,13 +151,21 @@ export default function Matchup() {
           </h2>
           <p className="text-muted-foreground text-sm">
             {hasEnoughMembers
-              ? 'You may have a bye this week, or the season schedule is still being prepared.'
+              ? 'You have a bye this week. Keep scoring for season points and get ready for your next opponent.'
               : 'Head-to-head competition starts once another player joins your league.'}
           </p>
         </div>
       </div>
     );
   }
+
+  const battleHeadline = isFinal
+    ? isTied ? 'Final: tie game' : isWinning ? 'Win secured' : 'Final whistle'
+    : isTied ? 'Dead even' : isWinning ? 'Protect the lead' : 'Time to make a run';
+
+  const battleSubtext = isFinal
+    ? isTied ? `You both finished on ${userScore} points.` : `${scoreDiff} point ${isWinning ? 'win' : 'loss'}.`
+    : isTied ? `${userScore}-${opponentScore}. One task can swing it.` : `${scoreDiff} point${scoreDiff !== 1 ? 's' : ''} ${isWinning ? 'ahead' : 'behind'}.`;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -118,10 +174,46 @@ export default function Matchup() {
         opponent={opponentParticipant}
         weekNumber={currentWeek.week_number}
         weekEndDate={currentWeek.end_date}
-        isLive={!currentWeek.is_locked && scheduledMatchup.status !== 'completed'}
+        isLive={!currentWeek.is_locked && !isFinal}
       />
 
-      <main className="px-4 py-4 space-y-6">
+      <main className="px-4 py-4 space-y-5">
+        <section className="card-elevated rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${
+                isFinal ? 'bg-muted' : isWinning ? 'bg-primary/20' : isTied ? 'bg-secondary/20' : 'bg-loss/20'
+              }`}>
+                {isFinal ? (isWinning ? '🏆' : isTied ? '🤝' : '🏁') : isWinning ? '🛡️' : isTied ? '⚖️' : '⚔️'}
+              </div>
+              <div>
+                <p className="font-semibold text-sm">{battleHeadline}</p>
+                <p className="text-xs text-muted-foreground">{battleSubtext}</p>
+              </div>
+            </div>
+            {!isFinal && (
+              <div className="flex items-center gap-1">
+                <TrendingUp className={`w-4 h-4 ${isWinning ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className="text-xs text-muted-foreground">vs {opponentParticipant.display_name}</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {!isFinal && (
+          <div className="grid grid-cols-2 gap-3">
+            <PowerUpButton weekId={currentWeek.id} />
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setTauntOpen(true)}
+              className="p-4 rounded-xl bg-muted flex items-center justify-center gap-2"
+            >
+              <MessageCircle className="w-5 h-5 text-secondary" />
+              <span className="font-semibold text-sm">Send Taunt</span>
+            </motion.button>
+          </div>
+        )}
+
         <Tabs defaultValue="activity" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-3">
             <TabsTrigger value="activity" className="flex items-center gap-1.5">
@@ -135,7 +227,7 @@ export default function Matchup() {
             </TabsTrigger>
             <TabsTrigger value="tasks" className="flex items-center gap-1.5">
               <ListChecks className="w-4 h-4" />
-              <span>Task Breakdown</span>
+              <span>Task Battle</span>
             </TabsTrigger>
           </TabsList>
 
@@ -158,75 +250,49 @@ export default function Matchup() {
             />
           </TabsContent>
         </Tabs>
-
-        <div className="grid grid-cols-2 gap-3">
-          <PowerUpButton weekId={currentWeek.id} />
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            className="p-4 rounded-xl bg-muted flex items-center justify-center gap-2"
-          >
-            <MessageCircle className="w-5 h-5 text-muted-foreground" />
-            <span className="font-semibold text-sm text-muted-foreground">Send Taunt</span>
-          </motion.button>
-        </div>
-
-        <section className="card-elevated rounded-xl p-4">
-          <h3 className="font-semibold text-sm mb-3">This Week's Battle</h3>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`
-                w-10 h-10 rounded-lg flex items-center justify-center text-lg
-                ${isWinning ? 'bg-primary/20' : 'bg-loss/20'}
-              `}>
-                {isWinning ? '🏆' : '⚔️'}
-              </div>
-              <div>
-                <p className="font-medium text-sm">
-                  {isWinning ? 'You\'re ahead!' : scoreDiff === 0 ? 'It\'s tied!' : 'Catch up!'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {scoreDiff} point{scoreDiff !== 1 ? 's' : ''} {isWinning ? 'lead' : scoreDiff === 0 ? '' : 'behind'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <TrendingUp className={`w-4 h-4 ${isWinning ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className="text-xs text-muted-foreground">
-                vs {opponentParticipant.display_name}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <div className="h-2 bg-muted rounded-full overflow-hidden flex">
-              <motion.div
-                className="bg-gradient-primary"
-                initial={{ width: 0 }}
-                animate={{
-                  width: `${userScore + opponentScore > 0
-                    ? (userScore / (userScore + opponentScore)) * 100
-                    : 50}%`
-                }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-              />
-              <motion.div
-                className="bg-loss/60"
-                initial={{ width: 0 }}
-                animate={{
-                  width: `${userScore + opponentScore > 0
-                    ? (opponentScore / (userScore + opponentScore)) * 100
-                    : 50}%`
-                }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-              />
-            </div>
-            <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
-              <span>You: {userScore} pts</span>
-              <span>{opponentParticipant.display_name}: {opponentScore} pts</span>
-            </div>
-          </div>
-        </section>
       </main>
+
+      <Dialog open={tauntOpen} onOpenChange={setTauntOpen}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Send a taunt</DialogTitle>
+            <DialogDescription>
+              Keep it competitive. {opponentParticipant.display_name} will get an in-app notification.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {QUICK_TAUNTS.map(taunt => (
+              <button
+                key={taunt}
+                onClick={() => sendTaunt.mutate(taunt)}
+                disabled={sendTaunt.isPending}
+                className="w-full p-3 rounded-xl bg-muted hover:bg-secondary/15 text-left text-sm transition-colors"
+              >
+                {taunt}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <Textarea
+              value={customTaunt}
+              onChange={event => setCustomTaunt(event.target.value.slice(0, 160))}
+              placeholder="Write your own…"
+              rows={3}
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">{customTaunt.length}/160</span>
+              <Button
+                onClick={() => sendTaunt.mutate(customTaunt.trim())}
+                disabled={!customTaunt.trim() || sendTaunt.isPending}
+              >
+                Send
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
