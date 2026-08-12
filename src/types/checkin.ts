@@ -38,4 +38,11 @@ export const TASK_ICONS: Record<string, string> = {
   timer: '⏱️',
   sparkles: '✨',
   hash: '🔢',
+  apple: '🍎',
+  trees: '🌳',
+  move: '🤸',
+  focus: '🧠',
+  bed: '😴',
+  route: '🏃',
+  users: '🤝',
 };
