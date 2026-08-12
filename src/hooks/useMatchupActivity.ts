@@ -12,6 +12,7 @@ export interface ActivityEvent {
   points_awarded: number;
   created_at: string;
   scoring_type: string;
+  powerup_applied: unknown | null;
 }
 
 interface UseMatchupActivityOptions {
@@ -41,6 +42,7 @@ export function useMatchupActivity({ weekId, userIds, enabled = true }: UseMatch
           user_id,
           points_awarded,
           scoring_type,
+          powerup_applied,
           created_at,
           task_instance_id,
           task_instances!scoring_events_task_instance_id_fkey (
@@ -79,6 +81,7 @@ export function useMatchupActivity({ weekId, userIds, enabled = true }: UseMatch
           points_awarded: event.points_awarded,
           created_at: event.created_at,
           scoring_type: event.scoring_type,
+          powerup_applied: event.powerup_applied,
         };
       });
     },
