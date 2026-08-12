@@ -54,9 +54,9 @@ export function useLeagueDetails(leagueId?: string) {
     queryFn: async (): Promise<LeagueDetails | null> => {
       if (!leagueId) return null;
 
-      const { error: lifecycleError } = await (supabase as any).rpc(
-        'refresh_competition_state',
-        { _league_id: leagueId }
+      const { error: lifecycleError } = await supabase.rpc(
+        'refresh_competition_state' as never,
+        { _league_id: leagueId } as never
       );
       if (lifecycleError) throw lifecycleError;
 
@@ -95,9 +95,6 @@ export function useLeagueDetails(leagueId?: string) {
         currentWeek = weeks?.[0] || null;
 
         if (!currentWeek) {
-          // Preseason / between scheduled dates: point the UI at the next week,
-          // not the final week of the season. If the season is already over,
-          // fall back to the most recently completed week.
           const { data: upcomingWeeks, error: upcomingError } = await supabase
             .from('weeks')
             .select('*')
