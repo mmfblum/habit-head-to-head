@@ -1,242 +1,136 @@
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Settings2 } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { TaskTemplate } from '@/hooks/useTaskTemplates';
-import {
-  TimeConfigInput,
-  ThresholdConfigInput,
-  PointsConfigInput,
-  ScoringPreview,
-} from './config-inputs';
-import { ScoringModePrompt, type ScoringMode } from './ScoringModePrompt';
-import { TaskValueInput } from './TaskValueInput';
+import { ScoringModeToggle } from './config-inputs/ScoringModeToggle';
+import { TimeConfigInput } from './config-inputs/TimeConfigInput';
+import { ThresholdConfigInput } from './config-inputs/ThresholdConfigInput';
+import { PointsConfigInput } from './config-inputs/PointsConfigInput';
+import { ScoringPreview } from './config-inputs/ScoringPreview';
 
 export interface TaskConfigOverrides {
-  scoring_mode: ScoringMode;
+  scoring_mode: 'binary' | 'detailed';
   target_time?: string;
   threshold?: number;
   target?: number;
   points?: number;
   binary_points?: number;
   max_tiers?: number;
+  [key: string]: unknown;
 }
 
 interface TaskConfigurationPanelProps {
-  template: TaskTemplate;
+  task: TaskTemplate;
   config: TaskConfigOverrides;
   onChange: (config: TaskConfigOverrides) => void;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
 }
 
-// Helper to get default config values
-function getDefaultConfig(template: TaskTemplate): TaskConfigOverrides {
-  const defaultConfig = template.default_config as Record<string, any>;
-  
-  // Determine if this task should default to binary or detailed
-  const isBinaryOnly = template.scoring_type === 'binary_yesno';
-  
+export function getInitialConfig(task: TaskTemplate): TaskConfigOverrides {
+  const defaults = (task.default_config || {}) as Record<string, unknown>;
+  const defaultBinaryPoints = typeof defaults.binary_points === 'number' ? defaults.binary_points : 3;
+
   return {
-    scoring_mode: isBinaryOnly ? 'binary' : 'detailed',
-    target_time: defaultConfig?.target_time || '06:30',
-    threshold: defaultConfig?.threshold || 30,
-    target: defaultConfig?.target || 10,
-    points: 10,
-    binary_points: 10,
-    max_tiers: defaultConfig?.max_tiers || 5,
-  };
+    scoring_mode: 'binary',
+    ...defaults,
+    binary_points: defaultBinaryPoints,
+  } as TaskConfigOverrides;
 }
 
-export function getInitialConfig(template: TaskTemplate): TaskConfigOverrides {
-  return getDefaultConfig(template);
+function getDefaultValue(task: TaskTemplate, field: string): unknown {
+  const config = (task.default_config || {}) as Record<string, unknown>;
+  return config[field];
 }
 
-// Get unit label based on template
-function getUnitLabel(template: TaskTemplate): string {
-  switch (template.unit) {
-    case 'minutes':
-      return 'minutes';
-    case 'steps':
-      return 'steps';
-    case 'count':
-      return template.name.toLowerCase().includes('meal') ? 'meals' : 'times';
-    case 'hours':
-      return 'hours';
-    case 'pages':
-      return 'pages';
-    default:
-      return 'units';
-  }
-}
+export function TaskConfigurationPanel({ task, config, onChange }: TaskConfigurationPanelProps) {
+  const [isOpen, setIsOpen] = useState(false);
 
-// Check if this task supports both modes
-function supportsBothModes(template: TaskTemplate): boolean {
-  // Binary-only tasks can't switch to detailed
-  return template.scoring_type !== 'binary_yesno';
-}
-
-export function TaskConfigurationPanel({
-  template,
-  config,
-  onChange,
-  isExpanded,
-  onToggleExpand,
-}: TaskConfigurationPanelProps) {
-  const defaultConfig = template.default_config as Record<string, any>;
-  const canToggleMode = supportsBothModes(template);
-
-  const updateConfig = (updates: Partial<TaskConfigOverrides>) => {
-    onChange({ ...config, ...updates });
+  const updateField = <K extends keyof TaskConfigOverrides>(field: K, value: TaskConfigOverrides[K]) => {
+    onChange({ ...config, [field]: value });
   };
 
-  // Render simple mode config (value commitment + points)
-  const renderSimpleModeConfig = () => {
-    return (
-      <div className="space-y-4">
-        <TaskValueInput
-          template={template}
-          value={config.target || config.threshold}
-          onChange={(value) => {
-            // Update both target and threshold to ensure naming works
-            updateConfig({ target: value, threshold: value });
-          }}
-        />
-      </div>
-    );
-  };
+  const hasTimeConfig = task.input_type === 'time' || task.scoring_type === 'time_before' || task.scoring_type === 'time_after';
+  const hasThresholdConfig = task.scoring_type === 'threshold' || task.scoring_type === 'linear_per_unit';
+  const hasPointsConfig = task.input_type === 'binary' || task.scoring_type === 'binary_yesno';
 
-  // Render detailed configuration based on scoring type
-  const renderDetailedConfig = () => {
-    switch (template.scoring_type) {
-      case 'time_before':
-      case 'time_after':
-        return (
-          <div className="space-y-4">
-            <TimeConfigInput
-              label={template.scoring_type === 'time_before' ? 'Bedtime Target' : 'Wake Time Target'}
-              description={
-                template.scoring_type === 'time_before'
-                  ? 'Be in bed by this time to earn full points'
-                  : 'Wake up by this time to earn full points'
-              }
-              value={config.target_time || defaultConfig?.target_time || '06:30'}
-              onChange={(value) => updateConfig({ target_time: value })}
-            />
-            <ThresholdConfigInput
-              label="Max Tiers"
-              description="Each tier = 30 min increment. 1 point per tier."
-              value={config.max_tiers || 5}
-              onChange={(value) => updateConfig({ max_tiers: value })}
-              unit="tiers"
-              min={1}
-              max={20}
-            />
-          </div>
-        );
+  const unitLabel = task.unit === 'steps' ? 'steps' :
+    task.unit === 'minutes' ? 'minutes' :
+    task.unit === 'pages' ? 'pages' :
+    task.unit === 'count' ? 'reps' : task.unit;
 
-      case 'threshold':
-        return (
-          <div className="space-y-4">
-            <ThresholdConfigInput
-              label="Minimum required"
-              description={`Complete at least this many ${getUnitLabel(template)} to earn points`}
-              value={config.threshold || defaultConfig?.threshold || 30}
-              onChange={(value) => updateConfig({ threshold: value })}
-              unit={getUnitLabel(template)}
-              min={1}
-              max={999}
-            />
-          </div>
-        );
-
-      case 'linear_per_unit':
-        return (
-          <div className="space-y-4">
-            <ThresholdConfigInput
-              label="Daily target"
-              description={`Goal for ${getUnitLabel(template)} per day`}
-              value={config.target || defaultConfig?.target || 10000}
-              onChange={(value) => updateConfig({ target: value })}
-              unit={getUnitLabel(template)}
-              min={1}
-              max={100000}
-            />
-            <ThresholdConfigInput
-              label="Max Tiers"
-              description="Each tier = portion of goal. 1 point per tier."
-              value={config.max_tiers || 5}
-              onChange={(value) => updateConfig({ max_tiers: value })}
-              unit="tiers"
-              min={1}
-              max={20}
-            />
-          </div>
-        );
-
-      case 'tiered':
-        return (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Points awarded based on tiers. Lower values = more points.
-            </p>
-            <ThresholdConfigInput
-              label="Max Tiers"
-              description="Number of scoring tiers (1 point per tier)"
-              value={config.max_tiers || 5}
-              onChange={(value) => updateConfig({ max_tiers: value })}
-              unit="tiers"
-              min={1}
-              max={20}
-            />
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
+  const currentTargetTime = config.target_time ?? String(getDefaultValue(task, 'target_time') ?? '07:00');
+  const currentThreshold = config.threshold ?? config.target ?? Number(getDefaultValue(task, 'threshold') ?? getDefaultValue(task, 'target') ?? 30);
+  const currentPoints = config.points ?? Number(getDefaultValue(task, 'points') ?? getDefaultValue(task, 'points_at_threshold') ?? 50);
 
   return (
-    <div className="border-t border-border/50 mt-3 pt-3">
-      <button
-        type="button"
-        onClick={onToggleExpand}
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
-      >
-        <Settings2 className="w-4 h-4" />
-        <span>Configure</span>
-        <ChevronDown
-          className={`w-4 h-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <div className="border-t border-border/50 mt-2 pt-2">
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-between h-8 text-xs text-muted-foreground hover:text-foreground"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="pt-4 space-y-4">
-              {canToggleMode && (
-                <ScoringModePrompt
-                  value={config.scoring_mode}
-                  onChange={(mode) => updateConfig({ scoring_mode: mode })}
-                />
-              )}
+            <span className="flex items-center gap-1.5">
+              <Settings2 className="w-3.5 h-3.5" />
+              Configure Scoring
+            </span>
+            {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </Button>
+        </CollapsibleTrigger>
 
-              {config.scoring_mode === 'binary' ? (
-                renderSimpleModeConfig()
-              ) : (
-                renderDetailedConfig()
-              )}
+        <CollapsibleContent>
+          <div
+            className="pt-3 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ScoringModeToggle
+              value={config.scoring_mode}
+              onChange={(mode) => updateField('scoring_mode', mode)}
+            />
 
-              <ScoringPreview template={template} config={config} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+            {config.scoring_mode === 'detailed' && (
+              <div className="space-y-4 pt-2 border-t border-border/30">
+                {hasTimeConfig && (
+                  <TimeConfigInput
+                    value={currentTargetTime}
+                    onChange={(value) => updateField('target_time', value)}
+                    label={task.name.toLowerCase().includes('wake') ? 'Wake by' : 'Complete by'}
+                  />
+                )}
+
+                {hasThresholdConfig && !hasTimeConfig && (
+                  <ThresholdConfigInput
+                    value={currentThreshold}
+                    onChange={(value) => {
+                      if (task.scoring_type === 'linear_per_unit') {
+                        updateField('target', value);
+                      } else {
+                        updateField('threshold', value);
+                      }
+                    }}
+                    unit={unitLabel}
+                    label="Daily Target"
+                    min={Number(task.min_value ?? 0)}
+                    max={Number(task.max_value ?? 100000)}
+                  />
+                )}
+
+                {hasPointsConfig && (
+                  <PointsConfigInput
+                    value={currentPoints}
+                    onChange={(value) => updateField('points', value)}
+                    label="Points for Completion"
+                  />
+                )}
+              </div>
+            )}
+
+            <ScoringPreview task={task} config={config} />
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }
