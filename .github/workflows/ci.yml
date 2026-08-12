@@ -78,6 +78,9 @@ jobs:
       - name: Lint database functions
         run: supabase db lint --schema public --level error --fail-on error
 
+      - name: Run database behavior tests
+        run: supabase test db
+
       - name: Stop local Supabase stack
         if: always()
         run: supabase stop --no-backup
