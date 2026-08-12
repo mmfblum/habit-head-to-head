@@ -12,6 +12,7 @@ import { DurationCheckinInput } from './DurationCheckinInput';
 import { TimerCheckinInput } from './TimerCheckinInput';
 import { ConfirmationButton } from './ConfirmationButton';
 import { VerificationBadge } from './VerificationBadge';
+import { ScoreCelebration } from './ScoreCelebration';
 import {
   buildVerifiedMetadata,
   createTimeCaptureMetadata,
@@ -27,6 +28,12 @@ import { useToast } from '@/hooks/use-toast';
 interface CheckinCardProps {
   task: TaskWithTemplate;
   date?: Date;
+}
+
+interface CelebrationState {
+  points: number;
+  powerPlay: boolean;
+  isUpdate: boolean;
 }
 
 const FALLBACK_VERIFICATION: VerificationConfig = {
@@ -52,6 +59,7 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
   );
 
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [celebration, setCelebration] = useState<CelebrationState | null>(null);
   const [value, setValue] = useState<CheckinValue>(() => ({
     boolean_value: task.todayCheckin?.boolean_value ?? false,
     numeric_value: task.todayCheckin?.numeric_value ?? 0,
@@ -69,19 +77,20 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
     setNeedsConfirmation(false);
   }, [task.todayCheckin]);
 
+  const dismissCelebration = useCallback(() => setCelebration(null), []);
   const icon = TASK_ICONS[task.template?.icon ?? 'activity'] ?? '📋';
   const isCompleted = !!task.todayCheckin;
   const isPending = submitCheckin.isPending;
   const config = (task.config || {}) as Record<string, unknown>;
   const minValue = task.template?.min_value ?? undefined;
   const maxValue = task.template?.max_value ?? undefined;
+  const customDescription = typeof config.custom_description === 'string' ? config.custom_description : undefined;
+  const description = customDescription || task.template?.description;
 
   const handleValueChange = useCallback((newValue: CheckinValue) => {
-    setValue(prev => ({ ...prev, ...newValue }));
-    if (verificationConfig.requires_confirmation && verificationConfig.method === 'manual_action') {
-      setNeedsConfirmation(true);
-    }
-  }, [verificationConfig.requires_confirmation, verificationConfig.method]);
+    setValue((previous) => ({ ...previous, ...newValue }));
+    setNeedsConfirmation(true);
+  }, []);
 
   const handleSubmit = async (
     checkinValue: CheckinValue,
@@ -95,13 +104,26 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
     };
 
     try {
-      await submitCheckin.mutateAsync({
+      const wasExisting = !!task.todayCheckin;
+      const result = await submitCheckin.mutateAsync({
         taskInstanceId: task.id,
         value: { ...checkinValue, metadata },
         date,
       });
-      triggerConfetti();
+      const points = Number(result.scoringEvent?.points_awarded ?? 0);
+      const powerPlay = result.scoringEvent?.powerup_applied != null;
+
       setNeedsConfirmation(false);
+
+      if (points > 0) {
+        triggerConfetti();
+        setCelebration({ points, powerPlay, isUpdate: wasExisting });
+      } else {
+        toast({
+          title: 'Result logged',
+          description: 'No points were awarded for this result.',
+        });
+      }
     } catch (error) {
       console.error('Checkin error:', error);
       toast({
@@ -113,22 +135,11 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
   };
 
   const handleConfirmation = async () => {
-    const validation = validateCheckinValue(
-      task.input_type,
-      value,
-      minValue,
-      maxValue
-    );
-
+    const validation = validateCheckinValue(task.input_type, value, minValue, maxValue);
     if (!validation.valid) {
-      toast({
-        title: 'Invalid value',
-        description: validation.error,
-        variant: 'destructive',
-      });
+      toast({ title: 'Invalid value', description: validation.error, variant: 'destructive' });
       return;
     }
-
     await handleSubmit(value, 'manual', true);
   };
 
@@ -142,8 +153,7 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
 
   const handleBinaryChange = async (newValue: boolean) => {
     const checkinValue: CheckinValue = { boolean_value: newValue };
-    setValue(checkinValue);
-
+    setValue((previous) => ({ ...previous, ...checkinValue }));
     if (!verificationConfig.requires_confirmation) {
       await handleSubmit(checkinValue, 'manual', true);
     } else {
@@ -151,51 +161,19 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
     }
   };
 
-  const handleNumericSubmit = async (newValue: number) => {
-    const checkinValue: CheckinValue = { numeric_value: newValue };
-    setValue(checkinValue);
-    if (!verificationConfig.requires_confirmation) {
-      await handleSubmit(checkinValue, 'manual', true);
-    } else {
-      setNeedsConfirmation(true);
-    }
-  };
-
-  const handleTimeSubmit = async (newValue: string) => {
-    const checkinValue: CheckinValue = { time_value: newValue };
-    setValue(checkinValue);
-    if (!verificationConfig.requires_confirmation) {
-      await handleSubmit(checkinValue, 'manual', true);
-    } else {
-      setNeedsConfirmation(true);
-    }
-  };
-
-  const handleDurationSubmit = async (minutes: number) => {
-    const checkinValue: CheckinValue = { duration_minutes: minutes };
-    setValue(checkinValue);
-    if (!verificationConfig.requires_confirmation) {
-      await handleSubmit(checkinValue, 'manual', true);
-    } else {
-      setNeedsConfirmation(true);
-    }
-  };
+  const handleNumericChange = (newValue: number) => handleValueChange({ numeric_value: newValue });
+  const handleTimeChange = (newValue: string) => handleValueChange({ time_value: newValue });
+  const handleDurationChange = (minutes: number) => handleValueChange({ duration_minutes: minutes });
 
   const renderInput = () => {
     switch (task.input_type) {
       case 'binary':
-        return (
-          <BinaryCheckinInput
-            value={value.boolean_value ?? false}
-            onChange={handleBinaryChange}
-            disabled={isPending}
-          />
-        );
+        return <BinaryCheckinInput value={value.boolean_value ?? false} onChange={handleBinaryChange} disabled={isPending} />;
       case 'numeric':
         return (
           <NumericCheckinInput
             value={value.numeric_value ?? 0}
-            onChange={handleNumericSubmit}
+            onChange={handleNumericChange}
             unit={task.template?.unit ?? 'count'}
             min={minValue}
             max={maxValue}
@@ -207,7 +185,7 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
         return (
           <TimeCheckinInput
             value={value.time_value ?? ''}
-            onChange={handleTimeSubmit}
+            onChange={handleTimeChange}
             disabled={isPending}
             label={task.task_name}
             targetTime={typeof config.target_time === 'string' ? config.target_time : undefined}
@@ -219,14 +197,9 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
           return (
             <TimerCheckinInput
               value={value.duration_minutes ?? 0}
-              onChange={(minutes, metadata) => {
-                setValue(prev => ({ ...prev, duration_minutes: minutes }));
-                handleSubmit(
-                  { duration_minutes: minutes },
-                  'timer',
-                  true,
-                  metadata as VerificationMetadata
-                );
+              onChange={(minutes, timerMetadata) => {
+                setValue((previous) => ({ ...previous, duration_minutes: minutes }));
+                handleSubmit({ duration_minutes: minutes }, 'timer', true, timerMetadata as VerificationMetadata);
               }}
               threshold={typeof config.threshold === 'number' ? config.threshold : undefined}
               minDurationSeconds={verificationConfig.min_duration_seconds}
@@ -238,7 +211,7 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
         return (
           <DurationCheckinInput
             value={value.duration_minutes ?? 0}
-            onChange={handleDurationSubmit}
+            onChange={handleDurationChange}
             disabled={isPending}
             threshold={typeof config.threshold === 'number' ? config.threshold : undefined}
           />
@@ -249,92 +222,101 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
   };
 
   const showTimestampButton = verificationConfig.captures_timestamp && task.input_type === 'time';
-  const confirmationAction = verificationConfig.confirmation_action || 'confirm';
+  const needsScoreButton = needsConfirmation && task.input_type !== 'binary' && !showTimestampButton;
+  const needsBinaryConfirmation = needsConfirmation && task.input_type === 'binary' && verificationConfig.requires_confirmation;
+  const confirmationAction = needsScoreButton ? 'log_score' : verificationConfig.confirmation_action || 'confirm';
 
   return (
-    <Card className={`p-4 transition-all ${isCompleted ? 'border-primary/30 bg-primary/5' : ''}`}>
-      <div className="flex items-start gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
-          isCompleted ? 'bg-primary/20' : 'bg-muted'
-        }`}>
-          {icon}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="font-semibold text-sm truncate">{task.task_name}</h3>
-            <VerificationBadge
-              verificationConfig={configuredVerification}
-              metadata={task.todayCheckin?.metadata as VerificationMetadata | null}
-              isVerified={isVerified}
-            />
+    <>
+      <Card className={`p-4 transition-all ${isCompleted ? 'border-primary/30 bg-primary/5' : ''}`}>
+        <div className="flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${isCompleted ? 'bg-primary/20' : 'bg-muted'}`}>
+            {icon}
           </div>
 
-          {task.template?.description && (
-            <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-              {task.template.description}
-            </p>
-          )}
-
-          {verificationConfig.auto_import_only ? (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground">
-              <Shield className="w-4 h-4" />
-              <span>This task syncs automatically from your connected data source.</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h3 className="font-semibold text-sm truncate">{task.task_name}</h3>
+              <VerificationBadge
+                verificationConfig={configuredVerification}
+                metadata={task.todayCheckin?.metadata as VerificationMetadata | null}
+                isVerified={isVerified}
+              />
             </div>
-          ) : showTimestampButton ? (
-            <ConfirmationButton
-              confirmationAction={confirmationAction}
-              isConfirmed={isCompleted && isVerified}
-              onConfirm={handleTimestampAction}
-              disabled={isPending}
-              capturesTimestamp
-            />
-          ) : (
-            <>
-              {renderInput()}
 
-              <AnimatePresence>
-                {needsConfirmation && verificationConfig.requires_confirmation && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="mt-3"
-                  >
-                    <ConfirmationButton
-                      confirmationAction={confirmationAction}
-                      isConfirmed={false}
-                      onConfirm={handleConfirmation}
-                      disabled={isPending}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </>
-          )}
+            {description && <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{description}</p>}
 
-          {configuredVerification && verificationStatus === 'flagged' && (
-            <div className="mt-3 flex items-center gap-2 p-2 rounded-lg bg-pending/10 text-pending text-xs">
-              <Flag className="w-3.5 h-3.5" />
-              <span>Manual entry flagged for review.</span>
-            </div>
-          )}
+            {verificationConfig.auto_import_only ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground">
+                <Shield className="w-4 h-4" />
+                <span>This score syncs from your connected device source.</span>
+              </div>
+            ) : showTimestampButton ? (
+              <ConfirmationButton
+                confirmationAction={verificationConfig.confirmation_action || 'confirm'}
+                isConfirmed={isCompleted && isVerified}
+                onConfirm={handleTimestampAction}
+                disabled={isPending}
+                capturesTimestamp
+              />
+            ) : (
+              <>
+                {renderInput()}
+                <AnimatePresence>
+                  {(needsScoreButton || needsBinaryConfirmation) && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-3"
+                    >
+                      <ConfirmationButton
+                        confirmationAction={confirmationAction}
+                        isConfirmed={false}
+                        onConfirm={handleConfirmation}
+                        disabled={isPending}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
 
-          {configuredVerification && verificationStatus === 'verified' && isCompleted && (
-            <div className="mt-3 flex items-center gap-2 text-primary text-xs">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Verified check-in</span>
-            </div>
-          )}
+            {configuredVerification && verificationStatus === 'flagged' && (
+              <div className="mt-3 flex items-center gap-2 p-2 rounded-lg bg-pending/10 text-pending text-xs">
+                <Flag className="w-3.5 h-3.5" />
+                <span>Manual entry flagged for review.</span>
+              </div>
+            )}
 
-          {configuredVerification && verificationStatus === 'unverified' && isCompleted && (
-            <div className="mt-3 flex items-center gap-2 p-2 rounded-lg bg-loss/10 text-loss text-xs">
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>Not verified — no points awarded.</span>
-            </div>
-          )}
+            {configuredVerification && verificationStatus === 'verified' && isCompleted && (
+              <div className="mt-3 flex items-center gap-2 text-primary text-xs">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verified score</span>
+              </div>
+            )}
+
+            {configuredVerification && verificationStatus === 'unverified' && isCompleted && (
+              <div className="mt-3 flex items-center gap-2 p-2 rounded-lg bg-loss/10 text-loss text-xs">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Not verified — no points awarded.</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+
+      <AnimatePresence>
+        {celebration && (
+          <ScoreCelebration
+            points={celebration.points}
+            taskName={task.task_name}
+            powerPlay={celebration.powerPlay}
+            isUpdate={celebration.isUpdate}
+            onDone={dismissCelebration}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
