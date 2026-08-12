@@ -17,8 +17,8 @@ export function useStartSeason() {
     },
     onSuccess: () => {
       toast({
-        title: 'Season Started!',
-        description: 'Week 1 is live. The head-to-head schedule is set.',
+        title: 'Season Scheduled!',
+        description: 'The head-to-head schedule is set. Week 1 kicks off Sunday.',
       });
       queryClient.invalidateQueries({ queryKey: ['league-details'] });
       queryClient.invalidateQueries({ queryKey: ['tasks-with-checkins'] });
@@ -28,7 +28,7 @@ export function useStartSeason() {
     },
     onError: (error: Error) => {
       toast({
-        title: 'Could not start season',
+        title: 'Could not schedule season',
         description: error.message,
         variant: 'destructive',
       });
