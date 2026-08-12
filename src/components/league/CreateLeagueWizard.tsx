@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronLeft, ChevronRight, Copy, Gamepad2, ListOrdered, Share2, Swords, Trophy, Users, Zap } from 'lucide-react';
@@ -12,13 +12,12 @@ import { useTaskTemplatesByCategory, type TaskTemplate } from '@/hooks/useTaskTe
 import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
 import { type TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
-import { DifficultyQuickStart, type QuickStartDifficulty, DIFFICULTY_PRESETS } from './DifficultyQuickStart';
+import { DifficultyQuickStart, type StarterPackId, STARTER_PACKS } from './DifficultyQuickStart';
 import { TaskSummaryPreview } from './TaskSummaryPreview';
 import { CustomChallengeBuilder, type CustomChallengeValue } from './CustomChallengeBuilder';
 
 type WizardStep = 'details' | 'tasks' | 'invite';
 
-const RECOMMENDED_TASK_NAMES = ['Steps', 'Workout', 'Reading', 'Journaling', 'Wake Time'];
 const CUSTOM_CHALLENGE_PREFIX = 'Custom Challenge —';
 
 interface LeagueFormData {
@@ -49,10 +48,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const [formData, setFormData] = useState<LeagueFormData>({
     name: '',
     description: '',
-    weeksCount: 4,
+    weeksCount: 8,
     gameFormat: 'head_to_head',
   });
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
+  const [defaultPackLoaded, setDefaultPackLoaded] = useState(false);
   const [createdLeague, setCreatedLeague] = useState<{ id: string; invite_code: string | null } | null>(null);
   const [createdSeason, setCreatedSeason] = useState<{ id: string } | null>(null);
 
@@ -89,6 +89,32 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     const entry = Array.from(taskConfigs.entries()).find(([taskId]) => customTemplateIds.has(taskId));
     return entry ? { templateId: entry[0], config: entry[1] } : undefined;
   }, [taskConfigs, customTemplateIds]);
+
+  const buildStarterPack = useCallback((packId: StarterPackId) => {
+    const pack = STARTER_PACKS[packId];
+    const next = new Map<string, TaskConfigOverrides>();
+
+    pack.tasks.forEach((taskName) => {
+      const template = allTemplates.find(
+        (candidate) => !customTemplateIds.has(candidate.id) && candidate.name === taskName
+      );
+      if (!template) return;
+      const baseConfig = getInitialConfig(template);
+      const overrides = pack.overrides?.[taskName] || {};
+      next.set(template.id, { ...baseConfig, ...overrides, scoring_mode: 'binary' });
+    });
+
+    return next;
+  }, [allTemplates, customTemplateIds]);
+
+  useEffect(() => {
+    if (step !== 'tasks' || defaultPackLoaded || tasksLoading || taskConfigs.size > 0) return;
+    const classic = buildStarterPack('classic');
+    if (classic.size >= 3) {
+      setTaskConfigs(classic);
+      setDefaultPackLoaded(true);
+    }
+  }, [step, defaultPackLoaded, tasksLoading, taskConfigs.size, buildStarterPack]);
 
   const handleDetailsSubmit = async () => {
     if (!formData.name.trim()) {
@@ -146,29 +172,17 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
   const handleClearAll = () => setTaskConfigs(new Map());
 
-  const handleQuickStart = (difficulty: QuickStartDifficulty) => {
+  const handleQuickStart = (packId: StarterPackId) => {
     if (!groupedTemplates) return;
-
-    const preset = DIFFICULTY_PRESETS[difficulty];
-    const next = new Map<string, TaskConfigOverrides>();
-
-    RECOMMENDED_TASK_NAMES.forEach((taskName) => {
-      const template = allTemplates.find(
-        (candidate) => !customTemplateIds.has(candidate.id) && candidate.name.includes(taskName)
-      );
-      if (!template) return;
-
-      const baseConfig = getInitialConfig(template);
-      const presetValues = preset.values[taskName as keyof typeof preset.values];
-      next.set(template.id, { ...baseConfig, ...presetValues });
-    });
+    const next = buildStarterPack(packId);
 
     if (customChallengeValue) {
       next.set(customChallengeValue.templateId, customChallengeValue.config);
     }
 
     setTaskConfigs(next);
-    toast.success(`Game ready: ${next.size} daily scoring opportunities.`);
+    setDefaultPackLoaded(true);
+    toast.success(`${STARTER_PACKS[packId].label} loaded with ${next.size} daily scoring chances.`);
   };
 
   const handleTasksSubmit = async () => {
@@ -349,6 +363,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                         );
                       })}
                     </div>
+                    <p className="text-xs text-muted-foreground">2 months is the recommended default. You can still choose shorter or longer.</p>
                   </div>
                 </div>
 
@@ -364,7 +379,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 <div className="text-center mb-4">
                   <Zap className="w-12 h-12 text-secondary mx-auto mb-3" />
                   <h3 className="text-xl font-display font-bold">What Scores Each Day?</h3>
-                  <p className="text-muted-foreground">Pick the things your league wants to compete on. Players will see these as their daily scoring chances.</p>
+                  <p className="text-muted-foreground">Classic Zrizin is already loaded. Keep it, choose another starter pack, or personalize anything.</p>
                 </div>
 
                 <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
@@ -437,7 +452,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
                 <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-background via-background to-transparent">
                   <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskConfigs.size < 3 || configureTasks.isPending}>
-                    {configureTasks.isPending ? 'Saving game...' : 'Lock Rules & Invite Friends'}
+                    {configureTasks.isPending ? 'Saving game...' : 'Use This Scorecard & Invite Friends'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                   {taskConfigs.size < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}
@@ -452,7 +467,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     <Users className="w-8 h-8 text-primary" />
                   </div>
                   <h3 className="text-xl font-display font-bold">Bring in the Competition</h3>
-                  <p className="text-muted-foreground">Your rules are set. Invite friends, then start Week 1 from the League tab.</p>
+                  <p className="text-muted-foreground">Your scorecard is ready. Practice opens as soon as the season is scheduled, and official Week 1 starts Sunday.</p>
                 </div>
 
                 {createdLeague?.invite_code && (
@@ -470,8 +485,8 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   <p className="font-semibold">What happens next?</p>
                   <p className="text-muted-foreground mt-1">
                     {isLeaderboard
-                      ? 'Once at least one other player joins, start the season. Every player scores the same tasks and the leaderboard resets for a fresh race each Sunday.'
-                      : 'Once at least one opponent joins, the commissioner schedules Week 1. Matchups kick off Sunday and run through Saturday.'}
+                      ? 'Once at least one other player joins, schedule the season. Preseason practice opens immediately and the official leaderboard resets to zero Sunday.'
+                      : 'Once at least one opponent joins, schedule Week 1. Everyone can practice immediately; the real matchup starts Sunday and runs through Saturday.'}
                   </p>
                 </div>
 
