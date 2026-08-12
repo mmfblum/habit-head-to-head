@@ -87,16 +87,24 @@ select lives_ok(
 
 reset role;
 
+-- Cache the opaque token before impersonating anon. The entire point of the
+-- following tests is that anon cannot query accountability_shares directly.
+select set_config(
+  'test.accountability_token',
+  (select token from public.accountability_shares where user_id='11111111-1111-4111-8111-111111111111'),
+  false
+);
+
 set local role anon;
 select isnt(
-  public.get_public_accountability_snapshot((select token from public.accountability_shares where user_id='11111111-1111-4111-8111-111111111111')),
+  public.get_public_accountability_snapshot(current_setting('test.accountability_token')),
   null::jsonb,
   'Valid accountability token returns a public snapshot'
 );
 
 select ok(
-  not (public.get_public_accountability_snapshot((select token from public.accountability_shares where user_id='11111111-1111-4111-8111-111111111111')) ? 'email')
-  and not (public.get_public_accountability_snapshot((select token from public.accountability_shares where user_id='11111111-1111-4111-8111-111111111111')) ? 'user_id'),
+  not (public.get_public_accountability_snapshot(current_setting('test.accountability_token')) ? 'email')
+  and not (public.get_public_accountability_snapshot(current_setting('test.accountability_token')) ? 'user_id'),
   'Public accountability snapshot omits email and private user id'
 );
 reset role;
@@ -111,7 +119,7 @@ reset role;
 
 set local role anon;
 select is(
-  public.get_public_accountability_snapshot((select token from public.accountability_shares where user_id='11111111-1111-4111-8111-111111111111')),
+  public.get_public_accountability_snapshot(current_setting('test.accountability_token')),
   null::jsonb,
   'Revoked accountability token stops returning data'
 );
