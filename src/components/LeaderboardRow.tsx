@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion';
 import { Crown, TrendingUp, TrendingDown, Skull } from 'lucide-react';
 
-// Define the User interface locally to avoid circular dependencies
 export interface LeaderboardUser {
   id: string;
   username: string;
@@ -10,7 +9,9 @@ export interface LeaderboardUser {
   seasonScore: number;
   wins: number;
   losses: number;
+  ties: number;
   streak: number;
+  streakType?: string | null;
   rank: number;
 }
 
@@ -28,19 +29,28 @@ export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestSco
   };
 
   const getStreakIndicator = () => {
-    if (user.streak >= 3) {
+    if (user.streak <= 0 || !user.streakType) return null;
+
+    if (user.streakType === 'W') {
       return (
         <div className="flex items-center gap-0.5 text-primary">
           <TrendingUp className="w-3 h-3" />
-          <span className="text-xs font-semibold">{user.streak}</span>
+          <span className="text-xs font-semibold">{user.streak}W</span>
         </div>
       );
     }
-    if (user.losses > user.wins) {
-      return <TrendingDown className="w-3 h-3 text-loss" />;
-    }
-    return null;
+
+    return (
+      <div className="flex items-center gap-0.5 text-loss">
+        <TrendingDown className="w-3 h-3" />
+        <span className="text-xs font-semibold">{user.streak}L</span>
+      </div>
+    );
   };
+
+  const record = user.ties > 0
+    ? `${user.wins}-${user.losses}-${user.ties}`
+    : `${user.wins}-${user.losses}`;
 
   return (
     <motion.div
@@ -48,20 +58,18 @@ export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestSco
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
       className={`flex items-center gap-3 p-3 rounded-xl transition-colors ${
-        isCurrentUser ? 'bg-primary/10 ring-1 ring-primary/30' : 
+        isCurrentUser ? 'bg-primary/10 ring-1 ring-primary/30' :
         isLowestScorer ? 'bg-loss/10' :
-        user.rank === 1 ? 'bg-pending/10' : 
+        user.rank === 1 ? 'bg-pending/10' :
         'hover:bg-muted/50'
       }`}
     >
-      {/* Rank */}
       <div className="w-8 h-8 flex items-center justify-center">
         {getRankDisplay()}
       </div>
 
-      {/* Avatar */}
       <div className="relative">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl overflow-hidden ${
           user.rank === 1 ? 'bg-pending/20' : 'bg-muted'
         }`}>
           {user.avatar}
@@ -73,7 +81,6 @@ export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestSco
         )}
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`font-semibold text-sm truncate ${isCurrentUser ? 'text-primary' : ''}`}>
@@ -81,17 +88,15 @@ export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestSco
           </span>
           {getStreakIndicator()}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="win-badge text-[10px] py-0.5 px-1.5">{user.wins}W</span>
-          <span className="loss-badge text-[10px] py-0.5 px-1.5">{user.losses}L</span>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          {record} {user.ties > 0 ? 'W-L-T' : 'W-L'}
+        </p>
       </div>
 
-      {/* Scores */}
       <div className="text-right">
         <p className="score-text text-lg">{user.seasonScore.toLocaleString()}</p>
         <p className="text-xs text-muted-foreground">
-          +{user.weeklyScore} this week
+          {user.weeklyScore.toLocaleString()} this week
         </p>
       </div>
     </motion.div>
