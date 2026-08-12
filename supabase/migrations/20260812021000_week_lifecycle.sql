@@ -2,13 +2,9 @@
 -- FANTASY WEEK LIFECYCLE
 -- =============================================================================
 -- Zrizin is a weekly head-to-head game. This function advances the competitive
--- state whenever a league member opens/refetches the app:
---   * past weeks are locked
---   * past matchups are finalized and winners are declared
---   * the current week's matchups are marked in progress
---   * standings, ranks, and win/loss streaks are recomputed
---
--- This is intentionally idempotent so it is safe to call on normal app loads.
+-- state whenever a league member opens/refetches the app. Calendar boundaries
+-- are evaluated in the league creator's profile timezone so Saturday does not
+-- end early just because the database server runs on UTC.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.refresh_competition_state(_league_id UUID)
@@ -24,13 +20,22 @@ DECLARE
     result_code TEXT;
     streak_code TEXT;
     streak_count INT;
+    league_timezone TEXT := 'America/New_York';
+    local_today DATE;
 BEGIN
-    -- Client callers may only refresh leagues they belong to. Database-side
-    -- callers (where auth.uid() is null) remain available for future cron use.
     IF auth.uid() IS NOT NULL
        AND NOT public.is_league_member(auth.uid(), _league_id) THEN
         RAISE EXCEPTION 'Not authorized to refresh this league';
     END IF;
+
+    SELECT COALESCE(p.timezone, 'America/New_York')
+    INTO league_timezone
+    FROM public.leagues l
+    LEFT JOIN public.profiles p ON p.id = l.created_by
+    WHERE l.id = _league_id;
+
+    league_timezone := COALESCE(league_timezone, 'America/New_York');
+    local_today := (now() AT TIME ZONE league_timezone)::DATE;
 
     FOR season_rec IN
         SELECT s.id
@@ -38,15 +43,12 @@ BEGIN
         WHERE s.league_id = _league_id
           AND s.status = 'active'
     LOOP
-        -- Close weeks whose final calendar day has passed.
         UPDATE public.weeks w
         SET is_locked = TRUE
         WHERE w.season_id = season_rec.id
-          AND w.end_date < CURRENT_DATE
+          AND w.end_date < local_today
           AND w.is_locked = FALSE;
 
-        -- Finalize every matchup in a finished week. A tie intentionally has a
-        -- NULL winner_id and counts as a tie in update_season_standing().
         UPDATE public.matchups m
         SET status = 'completed',
             winner_id = CASE
@@ -58,10 +60,9 @@ BEGIN
         FROM public.weeks w
         WHERE m.week_id = w.id
           AND w.season_id = season_rec.id
-          AND w.end_date < CURRENT_DATE
+          AND w.end_date < local_today
           AND m.status <> 'completed';
 
-        -- The current slate is live. Future weeks remain scheduled.
         UPDATE public.matchups m
         SET status = 'in_progress',
             winner_id = NULL,
@@ -69,7 +70,7 @@ BEGIN
         FROM public.weeks w
         WHERE m.week_id = w.id
           AND w.season_id = season_rec.id
-          AND CURRENT_DATE BETWEEN w.start_date AND w.end_date
+          AND local_today BETWEEN w.start_date AND w.end_date
           AND m.status <> 'completed';
 
         UPDATE public.matchups m
@@ -79,12 +80,9 @@ BEGIN
         FROM public.weeks w
         WHERE m.week_id = w.id
           AND w.season_id = season_rec.id
-          AND w.start_date > CURRENT_DATE
+          AND w.start_date > local_today
           AND m.status <> 'completed';
 
-        -- Recompute every member rather than only the person whose most recent
-        -- check-in changed. This keeps wins/losses and points-against coherent
-        -- immediately after a week closes.
         FOR member_rec IN
             SELECT lm.user_id
             FROM public.league_members lm
@@ -92,8 +90,6 @@ BEGIN
         LOOP
             PERFORM public.update_season_standing(member_rec.user_id, season_rec.id);
 
-            -- Determine the current W/L streak from the newest completed game
-            -- backwards. A tie breaks a streak rather than inventing a T streak.
             streak_code := NULL;
             streak_count := 0;
 
@@ -132,7 +128,8 @@ BEGIN
               AND ss.user_id = member_rec.user_id;
         END LOOP;
 
-        -- Fantasy-style standings: record first, season points as the tiebreaker.
+        -- Record is the primary ranking signal. Exact ties share a rank instead
+        -- of being broken by an arbitrary UUID.
         WITH ranked AS (
             SELECT
                 ss.user_id,
@@ -140,8 +137,7 @@ BEGIN
                     ORDER BY ss.wins DESC,
                              ss.ties DESC,
                              ss.total_points DESC,
-                             ss.points_against ASC,
-                             ss.user_id
+                             ss.points_against ASC
                 ) AS new_rank
             FROM public.season_standings ss
             WHERE ss.season_id = season_rec.id
@@ -157,4 +153,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.refresh_competition_state IS
-'Idempotently advances Zrizin weekly competition state: closes finished matchups, declares winners, marks the current slate live, and recomputes fantasy-style standings/ranks/streaks.';
+'Idempotently advances Zrizin weekly competition state in the league timezone: closes finished matchups, declares winners, marks the current slate live, and recomputes fantasy-style standings/ranks/streaks.';
