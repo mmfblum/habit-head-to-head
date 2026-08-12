@@ -64,7 +64,7 @@ export default function League() {
 
   const sortedMembers = [...league.members].sort((a, b) => {
     if (isLeaderboard) {
-      return b.total_points - a.total_points || b.weekly_points - a.weekly_points;
+      return b.championship_points - a.championship_points || b.total_points - a.total_points || b.weekly_points - a.weekly_points;
     }
     return (
       (a.current_rank ?? 999) - (b.current_rank ?? 999) ||
@@ -101,7 +101,10 @@ export default function League() {
 
   const renderAvatar = (member?: LeagueMemberWithProfile, rank = 0) => {
     if (member?.avatar_url) {
-      return <img src={member.avatar_url} alt={member.display_name || 'Player'} className="w-full h-full object-cover" />;
+      if (member.avatar_url.startsWith('http://') || member.avatar_url.startsWith('https://')) {
+        return <img src={member.avatar_url} alt={member.display_name || 'Player'} className="w-full h-full object-cover" />;
+      }
+      return <span className="text-xl">{member.avatar_url}</span>;
     }
     return <span>{member?.display_name?.charAt(0).toUpperCase() || getDefaultAvatar(rank)}</span>;
   };
@@ -111,7 +114,7 @@ export default function League() {
     username: member.display_name || 'Unknown',
     avatar: member.avatar_url || member.display_name?.charAt(0).toUpperCase() || getDefaultAvatar(rank),
     weeklyScore: member.weekly_points,
-    seasonScore: member.total_points,
+    seasonScore: isLeaderboard ? member.championship_points : member.total_points,
     wins: member.wins,
     losses: member.losses,
     ties: member.ties,
@@ -371,7 +374,7 @@ export default function League() {
           <div className="flex items-center gap-2 mb-3">
             <Trophy className="w-4 h-4 text-pending" />
             <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-              {isActive ? 'Season Standings' : 'League Members'}
+              {isActive ? (isLeaderboard ? 'Season Championship' : 'Season Standings') : 'League Members'}
             </h2>
           </div>
 

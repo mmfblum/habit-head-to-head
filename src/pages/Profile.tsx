@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useDeleteLeague, useLeaveLeague } from '@/hooks/useLeagueActions';
+import { TrophyCase } from '@/components/profile/TrophyCase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -148,15 +149,15 @@ export default function Profile() {
         },
         {
           icon: Target,
-          label: 'Week Points',
+          label: 'Week Raw Points',
           value: currentMember?.weekly_points?.toLocaleString() ?? '0',
-          subtext: 'Current scoring week',
+          subtext: 'Current weekly race',
         },
         {
           icon: Award,
-          label: 'Season Points',
-          value: currentMember?.total_points?.toLocaleString() ?? '0',
-          subtext: 'Cumulative total',
+          label: 'Championship Points',
+          value: currentMember?.championship_points?.toLocaleString() ?? '0',
+          subtext: `${currentMember?.total_points?.toLocaleString() ?? '0'} raw season pts`,
         },
       ]
     : [
@@ -339,6 +340,14 @@ export default function Profile() {
             })}
           </div>
         </section>
+
+        <TrophyCase
+          userId={user?.id}
+          seasonId={league?.current_season?.id}
+          wins={currentMember?.wins ?? 0}
+          currentStreak={currentMember?.current_streak ?? 0}
+          streakType={currentMember?.streak_type}
+        />
 
         <section className="card-elevated rounded-xl p-4">
           <div className="flex items-center gap-3">
