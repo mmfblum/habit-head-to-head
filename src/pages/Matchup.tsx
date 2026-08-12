@@ -114,10 +114,13 @@ export default function Matchup() {
   const sendTaunt = useMutation({
     mutationFn: async (body: string) => {
       if (!scheduledMatchup?.id || !isLiveGame) throw new Error('Taunts open when the matchup goes live');
-      const { error } = await (supabase as any).rpc('send_matchup_taunt', {
-        _matchup_id: scheduledMatchup.id,
-        _body: body,
-      });
+      const { error } = await supabase.rpc(
+        'send_matchup_taunt' as never,
+        {
+          _matchup_id: scheduledMatchup.id,
+          _body: body,
+        } as never
+      );
       if (error) throw error;
     },
     onSuccess: () => {
