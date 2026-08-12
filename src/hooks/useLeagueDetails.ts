@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getLocalISODate } from '@/lib/date';
 import { useAuth } from './useAuth';
+import type { LeagueGameFormat } from './useLeagues';
 
 export interface LeagueMemberWithProfile {
   id: string;
@@ -27,6 +28,7 @@ export interface LeagueDetails {
   max_members: number;
   min_members: number;
   created_by: string | null;
+  game_format: LeagueGameFormat;
   current_season: {
     id: string;
     name: string;
@@ -68,6 +70,9 @@ export function useLeagueDetails(leagueId?: string) {
 
       if (leagueError) throw leagueError;
       if (!league) return null;
+
+      const leagueRecord = league as typeof league & { game_format?: LeagueGameFormat };
+      const gameFormat: LeagueGameFormat = leagueRecord.game_format ?? 'head_to_head';
 
       const { data: seasons, error: seasonsError } = await supabase
         .from('seasons')
@@ -153,15 +158,15 @@ export function useLeagueDetails(leagueId?: string) {
           .eq('season_id', currentSeason.id);
 
         if (standingsError) throw standingsError;
-        standings?.forEach((s) => {
-          standingsMap.set(s.user_id, {
-            total_points: s.total_points,
-            wins: s.wins,
-            losses: s.losses,
-            ties: s.ties,
-            current_streak: s.current_streak,
-            streak_type: s.streak_type,
-            current_rank: s.current_rank,
+        standings?.forEach((standing) => {
+          standingsMap.set(standing.user_id, {
+            total_points: standing.total_points,
+            wins: standing.wins,
+            losses: standing.losses,
+            ties: standing.ties,
+            current_streak: standing.current_streak,
+            streak_type: standing.streak_type,
+            current_rank: standing.current_rank,
           });
         });
       }
@@ -174,18 +179,18 @@ export function useLeagueDetails(leagueId?: string) {
           .eq('week_id', currentWeek.id);
 
         if (scoresError) throw scoresError;
-        weeklyScores?.forEach((ws) => {
-          weeklyScoresMap.set(ws.user_id, ws.total_points);
+        weeklyScores?.forEach((weeklyScore) => {
+          weeklyScoresMap.set(weeklyScore.user_id, weeklyScore.total_points);
         });
       }
 
-      const membersWithDetails: LeagueMemberWithProfile[] = (members || []).map((m) => {
-        const profile = m.profiles as { display_name: string | null; avatar_url: string | null } | null;
-        const standing = standingsMap.get(m.user_id);
+      const membersWithDetails: LeagueMemberWithProfile[] = (members || []).map((member) => {
+        const profile = member.profiles as { display_name: string | null; avatar_url: string | null } | null;
+        const standing = standingsMap.get(member.user_id);
         return {
-          id: m.id,
-          user_id: m.user_id,
-          role: m.role,
+          id: member.id,
+          user_id: member.user_id,
+          role: member.role,
           display_name: profile?.display_name || 'Unknown',
           avatar_url: profile?.avatar_url || null,
           total_points: standing?.total_points || 0,
@@ -195,16 +200,21 @@ export function useLeagueDetails(leagueId?: string) {
           current_streak: standing?.current_streak || 0,
           streak_type: standing?.streak_type || null,
           current_rank: standing?.current_rank || null,
-          weekly_points: weeklyScoresMap.get(m.user_id) || 0,
+          weekly_points: weeklyScoresMap.get(member.user_id) || 0,
         };
       });
 
-      membersWithDetails.sort((a, b) =>
-        b.wins - a.wins ||
-        b.ties - a.ties ||
-        b.total_points - a.total_points ||
-        a.losses - b.losses
-      );
+      if (gameFormat === 'leaderboard') {
+        membersWithDetails.sort((a, b) => b.total_points - a.total_points);
+      } else {
+        membersWithDetails.sort((a, b) =>
+          b.wins - a.wins ||
+          b.ties - a.ties ||
+          b.total_points - a.total_points ||
+          a.losses - b.losses
+        );
+      }
+
       membersWithDetails.forEach((member, index) => {
         if (!member.current_rank) member.current_rank = index + 1;
       });
@@ -217,6 +227,7 @@ export function useLeagueDetails(leagueId?: string) {
         max_members: league.max_members,
         min_members: league.min_members,
         created_by: league.created_by,
+        game_format: gameFormat,
         current_season: currentSeason ? {
           id: currentSeason.id,
           name: currentSeason.name,
