@@ -75,6 +75,9 @@ jobs:
       - name: Replay every migration from zero
         run: supabase db reset --local
 
+      - name: Lint database functions
+        run: supabase db lint --schema public --level error --fail-on error
+
       - name: Stop local Supabase stack
         if: always()
         run: supabase stop --no-backup
