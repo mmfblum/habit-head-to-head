@@ -21,6 +21,19 @@ interface UseMatchupActivityOptions {
   enabled?: boolean;
 }
 
+type TaskRelation = {
+  league_task_configs?: {
+    task_templates?: {
+      name?: string | null;
+      icon?: string | null;
+    } | null;
+  } | null;
+} | null;
+
+type RealtimeUserPayload = {
+  user_id?: string | null;
+};
+
 const PAGE_SIZE = 20;
 
 export function useMatchupActivity({ weekId, userIds, enabled = true }: UseMatchupActivityOptions) {
@@ -67,7 +80,8 @@ export function useMatchupActivity({ weekId, userIds, enabled = true }: UseMatch
       if (error) throw error;
 
       return (events || []).map((event) => {
-        const taskConfig = (event.task_instances as any)?.league_task_configs;
+        const taskRelation = event.task_instances as unknown as TaskRelation;
+        const taskConfig = taskRelation?.league_task_configs;
         const template = taskConfig?.task_templates;
         const profile = event.profiles as { display_name: string | null; avatar_url: string | null } | null;
 
@@ -103,8 +117,8 @@ export function useMatchupActivity({ weekId, userIds, enabled = true }: UseMatch
           filter: `week_id=eq.${weekId}`,
         },
         (payload) => {
-          const changed = (payload.new || payload.old) as any;
-          if (normalizedUserIds.includes(changed?.user_id)) {
+          const changed = (payload.new || payload.old) as RealtimeUserPayload;
+          if (changed.user_id && normalizedUserIds.includes(changed.user_id)) {
             queryClient.invalidateQueries({ queryKey });
           }
         }
@@ -170,8 +184,8 @@ export function useMatchupScores(weekId?: string, userIds: string[] = []) {
           filter: `week_id=eq.${weekId}`,
         },
         (payload) => {
-          const changed = (payload.new || payload.old) as any;
-          if (normalizedUserIds.includes(changed?.user_id)) {
+          const changed = (payload.new || payload.old) as RealtimeUserPayload;
+          if (changed.user_id && normalizedUserIds.includes(changed.user_id)) {
             queryClient.invalidateQueries({ queryKey });
           }
         }
