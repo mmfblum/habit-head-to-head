@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface PunishmentSpin {
   id: string;
   league_id: string;
   week_id: string;
-  matchup_id: string;
+  matchup_id: string | null;
   loser_user_id: string;
-  winner_user_id: string;
+  winner_user_id: string | null;
   punishment_option_id: string | null;
   result_label: string;
   result_description: string;
@@ -17,21 +18,26 @@ export interface PunishmentSpin {
 }
 
 export function usePunishmentWheel(matchupId?: string, weekId?: string) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const queryKey = ['punishment-spin', matchupId ?? weekId, user?.id];
 
   const spinQuery = useQuery({
-    queryKey: ['punishment-spin', matchupId],
+    queryKey,
     queryFn: async (): Promise<PunishmentSpin | null> => {
-      if (!matchupId) return null;
-      const { data, error } = await supabase
+      if (!user?.id || (!matchupId && !weekId)) return null;
+      let query = supabase
         .from('punishment_spins' as never)
         .select('*')
-        .eq('matchup_id', matchupId)
-        .maybeSingle();
+        .eq('loser_user_id', user.id);
+      query = matchupId
+        ? query.eq('matchup_id', matchupId)
+        : query.eq('week_id', weekId!);
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
       return data as unknown as PunishmentSpin | null;
     },
-    enabled: !!matchupId,
+    enabled: !!user?.id && (!!matchupId || !!weekId),
   });
 
   const spin = useMutation({
@@ -45,7 +51,7 @@ export function usePunishmentWheel(matchupId?: string, weekId?: string) {
       return data as unknown as PunishmentSpin;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['punishment-spin', matchupId] });
+      await queryClient.invalidateQueries({ queryKey });
       await queryClient.invalidateQueries({ queryKey: ['league-events'] });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -60,7 +66,7 @@ export function usePunishmentWheel(matchupId?: string, weekId?: string) {
       if (error) throw error;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['punishment-spin', matchupId] });
+      await queryClient.invalidateQueries({ queryKey });
       await queryClient.invalidateQueries({ queryKey: ['league-events'] });
     },
   });
