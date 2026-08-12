@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { disableNativePushForCurrentUser } from '@/lib/nativePush';
 import { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -22,14 +23,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -49,10 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: redirectUrl,
       }
     });
-    
-    // Check if email confirmation is needed (user exists but not confirmed)
+
     const needsEmailConfirmation = !error && data?.user && !data.user.confirmed_at;
-    
+
     return { error: error as Error | null, needsEmailConfirmation: !!needsEmailConfirmation };
   };
 
@@ -65,6 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    try {
+      await disableNativePushForCurrentUser();
+    } catch (error) {
+      console.warn('Could not disable native push before sign out', error);
+    }
     await supabase.auth.signOut();
   };
 
