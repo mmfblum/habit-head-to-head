@@ -40,7 +40,6 @@ function DashboardSkeleton() {
           {[1, 2, 3].map((item) => <Skeleton key={item} className="h-24 rounded-xl" />)}
         </div>
       </main>
-      <WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />
     </div>
   );
 }
@@ -455,6 +454,7 @@ export default function Dashboard() {
           </motion.button>
         )}
       </main>
+      <WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />
     </div>
   );
 }
