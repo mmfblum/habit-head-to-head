@@ -6,20 +6,32 @@ import { usePunishmentWheel, type PunishmentSpin } from '@/hooks/usePunishmentWh
 import { toast } from 'sonner';
 
 interface PunishmentWheelCardProps {
-  matchupId: string;
+  matchupId?: string;
   weekId: string;
   didLose: boolean;
-  opponentName: string;
+  opponentName?: string;
+  context?: 'matchup' | 'leaderboard';
 }
 
 const WHEEL_EMOJIS = ['🫏', '💀', '🎙️', '👏', '🎭', '📚'];
 
-export function PunishmentWheelCard({ matchupId, weekId, didLose, opponentName }: PunishmentWheelCardProps) {
+export function PunishmentWheelCard({
+  matchupId,
+  weekId,
+  didLose,
+  opponentName = 'The loser',
+  context = 'matchup',
+}: PunishmentWheelCardProps) {
   const { data: savedSpin, spin, complete, isLoading } = usePunishmentWheel(matchupId, weekId);
   const [isSpinning, setIsSpinning] = useState(false);
   const [justSpun, setJustSpun] = useState<PunishmentSpin | null>(null);
 
   const result = justSpun ?? savedSpin;
+  const loserTitle = context === 'leaderboard' ? 'You finished last. Spin the wheel.' : 'You lost. Spin the wheel.';
+  const winnerTitle = context === 'leaderboard' ? 'You escaped last place.' : 'You won. No wheel for you.';
+  const winnerBody = context === 'leaderboard'
+    ? `${opponentName} finished last and still owes the league a punishment spin.`
+    : `${opponentName} still owes the league a punishment spin.`;
 
   const handleSpin = async () => {
     setIsSpinning(true);
@@ -105,7 +117,7 @@ export function PunishmentWheelCard({ matchupId, weekId, didLose, opponentName }
     return (
       <section className="rounded-2xl border border-primary/25 bg-primary/5 p-4 flex items-center gap-3">
         <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center"><Trophy className="w-5 h-5 text-primary" /></div>
-        <div><p className="font-semibold text-sm">You won. No wheel for you.</p><p className="text-xs text-muted-foreground">{opponentName} still owes the league a punishment spin.</p></div>
+        <div><p className="font-semibold text-sm">{winnerTitle}</p><p className="text-xs text-muted-foreground">{winnerBody}</p></div>
       </section>
     );
   }
@@ -114,7 +126,7 @@ export function PunishmentWheelCard({ matchupId, weekId, didLose, opponentName }
     <section className="rounded-2xl border-2 border-loss/30 bg-loss/5 p-5 text-center">
       <div className="w-14 h-14 rounded-2xl bg-loss/15 flex items-center justify-center mx-auto"><Skull className="w-7 h-7 text-loss" /></div>
       <p className="text-[10px] uppercase tracking-[0.2em] text-loss font-bold mt-3">Final consequence</p>
-      <h3 className="font-display font-bold text-xl mt-1">You lost. Spin the wheel.</h3>
+      <h3 className="font-display font-bold text-xl mt-1">{loserTitle}</h3>
       <p className="text-sm text-muted-foreground mt-2">One spin. No rerolls. The result goes into the league feed.</p>
       <Button onClick={handleSpin} disabled={spin.isPending} className="w-full mt-4 bg-loss text-loss-foreground hover:bg-loss/90">
         {spin.isPending ? 'Locking in your fate...' : '🎡 SPIN THE PUNISHMENT WHEEL'}
