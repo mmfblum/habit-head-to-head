@@ -47,29 +47,25 @@ export function useCreateLeague() {
     }) => {
       if (!user) throw new Error('Must be logged in');
 
-      const { data: league, error: leagueError } = await supabase
+      const { data: leagueId, error: createError } = await supabase.rpc(
+        'create_league' as never,
+        {
+          _name: name,
+          _description: description ?? null,
+          _game_format: gameFormat,
+        } as never
+      );
+
+      if (createError) throw createError;
+      if (!leagueId) throw new Error('League creation did not return a league ID');
+
+      const { data: league, error: fetchError } = await supabase
         .from('leagues')
-        .insert({
-          name,
-          description,
-          created_by: user.id,
-          game_format: gameFormat,
-        } as never)
-        .select()
+        .select('*')
+        .eq('id', leagueId as unknown as string)
         .single();
 
-      if (leagueError) throw leagueError;
-
-      const { error: memberError } = await supabase
-        .from('league_members')
-        .insert({
-          league_id: league.id,
-          user_id: user.id,
-          role: 'owner',
-        });
-
-      if (memberError) throw memberError;
-
+      if (fetchError) throw fetchError;
       return league as typeof league & { game_format: LeagueGameFormat };
     },
     onSuccess: async () => {
