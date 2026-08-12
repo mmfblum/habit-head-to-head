@@ -3,7 +3,7 @@ import { MatchupCard } from '@/components/MatchupCard';
 import { QuickStats } from '@/components/StatsGrid';
 import { TaskCard } from '@/components/TaskCard';
 import { LeaderboardRaceCard } from '@/components/leaderboard/LeaderboardRaceCard';
-import { CheckCircle2, ChevronRight, Zap, Bell, UserPlus, Trophy, Target, CalendarDays } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Zap, Bell, UserPlus, Trophy, Target, CalendarDays, ListOrdered } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
@@ -166,8 +166,9 @@ export default function Dashboard() {
   const nextTask = transformedTasks.find((task) => !task.completed);
 
   const weeklySorted = [...leagueDetails.members].sort((a, b) => b.weekly_points - a.weekly_points);
+  const hasWeeklyScoring = weeklySorted.some((member) => member.weekly_points > 0);
   const currentWeeklyIndex = weeklySorted.findIndex((member) => member.user_id === user?.id);
-  const weeklyRank = currentWeeklyIndex >= 0
+  const weeklyRank = hasWeeklyScoring && currentWeeklyIndex >= 0
     ? weeklySorted.findIndex((member) => member.weekly_points === weeklySorted[currentWeeklyIndex].weekly_points) + 1
     : undefined;
 
@@ -231,6 +232,32 @@ export default function Dashboard() {
               weekNumber={currentWeek.week_number}
               onOpen={() => navigate('/league')}
             />
+          ) : isLeaderboard ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-2xl bg-gradient-to-r from-pending/10 to-primary/10 border border-pending/20"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-pending/20 flex items-center justify-center">
+                  <ListOrdered className="w-5 h-5 text-pending" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-sm">Leaderboard League</p>
+                  <p className="text-xs text-muted-foreground">
+                    {totalMembers < 2
+                      ? `Invite another player to start the race. Code: ${leagueDetails.invite_code ?? 'N/A'}`
+                      : 'Your players are in. Start the season from the League tab to open Week 1.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate('/league')}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold"
+                >
+                  {totalMembers < 2 ? 'Invite' : 'League'}
+                </button>
+              </div>
+            </motion.div>
           ) : displayMatchup ? (
             <MatchupCard
               matchup={displayMatchup}
@@ -352,7 +379,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3">
               <div className="card-elevated rounded-xl p-4">
                 <Trophy className="w-4 h-4 text-pending mb-2" />
-                <p className="score-text text-2xl">{currentMember?.current_rank ? `#${currentMember.current_rank}` : '—'}</p>
+                <p className="score-text text-2xl">{currentMember?.total_points ? (currentMember.current_rank ? `#${currentMember.current_rank}` : '—') : '—'}</p>
                 <p className="text-xs text-muted-foreground mt-1">Season rank</p>
               </div>
               <div className="card-elevated rounded-xl p-4">
