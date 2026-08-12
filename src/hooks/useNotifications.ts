@@ -102,7 +102,7 @@ export function useDailyMatchupNotifications(args: {
       body,
       notify_date: today,
     });
-    if (error && !(error as any).code?.toString().includes('23505')) throw error;
+    if (error && error.code !== '23505') throw error;
   };
 
   useQuery({
