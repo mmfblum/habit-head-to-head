@@ -23,6 +23,19 @@ jobs:
           node-version: 20
           cache: npm
 
+      # The existing package-lock predates several package.json changes. Refresh
+      # it once on this branch so we can capture the canonical npm lock and then
+      # return CI to strict `npm ci` installs.
+      - name: Refresh npm lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Upload refreshed lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          retention-days: 1
+
       - name: Install dependencies
         run: npm ci
 
