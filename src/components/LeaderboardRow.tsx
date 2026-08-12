@@ -22,6 +22,13 @@ interface LeaderboardRowProps {
   isLowestScorer?: boolean;
 }
 
+function Avatar({ value, alt }: { value: string; alt: string }) {
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return <img src={value} alt={alt} className="w-full h-full object-cover" />;
+  }
+  return <span>{value}</span>;
+}
+
 export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestScorer = false }: LeaderboardRowProps) {
   const getRankDisplay = () => {
     if (user.rank === 1) return <Crown className="w-5 h-5 text-pending" />;
@@ -72,7 +79,7 @@ export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestSco
         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl overflow-hidden ${
           user.rank === 1 ? 'bg-pending/20' : 'bg-muted'
         }`}>
-          {user.avatar}
+          <Avatar value={user.avatar} alt={user.username} />
         </div>
         {isLowestScorer && (
           <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-loss rounded-full flex items-center justify-center">
