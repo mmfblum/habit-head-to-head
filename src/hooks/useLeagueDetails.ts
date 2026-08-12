@@ -9,7 +9,6 @@ export interface LeagueMemberWithProfile {
   role: string;
   display_name: string | null;
   avatar_url: string | null;
-  // Season standings
   total_points: number;
   wins: number;
   losses: number;
@@ -17,7 +16,6 @@ export interface LeagueMemberWithProfile {
   current_streak: number;
   streak_type: string | null;
   current_rank: number | null;
-  // Weekly score (for current week)
   weekly_points: number;
 }
 
@@ -29,7 +27,6 @@ export interface LeagueDetails {
   max_members: number;
   min_members: number;
   created_by: string | null;
-  // Current season info
   current_season: {
     id: string;
     name: string;
@@ -39,7 +36,6 @@ export interface LeagueDetails {
     end_date: string;
     weeks_count: number;
   } | null;
-  // Current week info
   current_week: {
     id: string;
     week_number: number;
@@ -47,7 +43,6 @@ export interface LeagueDetails {
     end_date: string;
     is_locked: boolean;
   } | null;
-  // Members with standings
   members: LeagueMemberWithProfile[];
 }
 
@@ -59,7 +54,15 @@ export function useLeagueDetails(leagueId?: string) {
     queryFn: async (): Promise<LeagueDetails | null> => {
       if (!leagueId) return null;
 
-      // 1. Fetch league basic info
+      // Advance the fantasy-week lifecycle before reading standings. The RPC is
+      // idempotent: past games close, the current slate becomes live, and ranks
+      // are recomputed. Cast here until generated Supabase types are refreshed.
+      const { error: lifecycleError } = await (supabase as any).rpc(
+        'refresh_competition_state',
+        { _league_id: leagueId }
+      );
+      if (lifecycleError) throw lifecycleError;
+
       const { data: league, error: leagueError } = await supabase
         .from('leagues')
         .select('*')
@@ -69,7 +72,6 @@ export function useLeagueDetails(leagueId?: string) {
       if (leagueError) throw leagueError;
       if (!league) return null;
 
-      // 2. Fetch current/active season for this league
       const { data: seasons, error: seasonsError } = await supabase
         .from('seasons')
         .select('*')
@@ -81,7 +83,6 @@ export function useLeagueDetails(leagueId?: string) {
       if (seasonsError) throw seasonsError;
       const currentSeason = seasons?.[0] || null;
 
-      // 3. Fetch current week if we have an active season
       let currentWeek = null;
       if (currentSeason) {
         const today = getLocalISODate();
@@ -96,7 +97,6 @@ export function useLeagueDetails(leagueId?: string) {
         if (weeksError) throw weeksError;
         currentWeek = weeks?.[0] || null;
 
-        // If no current week found, get the latest week
         if (!currentWeek) {
           const { data: latestWeek } = await supabase
             .from('weeks')
@@ -108,7 +108,6 @@ export function useLeagueDetails(leagueId?: string) {
         }
       }
 
-      // 4. Fetch league members with their profiles
       const { data: members, error: membersError } = await supabase
         .from('league_members')
         .select(`
@@ -124,8 +123,7 @@ export function useLeagueDetails(leagueId?: string) {
 
       if (membersError) throw membersError;
 
-      // 5. Fetch season standings if we have a season
-      let standingsMap = new Map<string, {
+      const standingsMap = new Map<string, {
         total_points: number;
         wins: number;
         losses: number;
@@ -136,42 +134,38 @@ export function useLeagueDetails(leagueId?: string) {
       }>();
 
       if (currentSeason) {
-        const { data: standings } = await supabase
+        const { data: standings, error: standingsError } = await supabase
           .from('season_standings')
           .select('*')
           .eq('season_id', currentSeason.id);
 
-        if (standings) {
-          standings.forEach((s) => {
-            standingsMap.set(s.user_id, {
-              total_points: s.total_points,
-              wins: s.wins,
-              losses: s.losses,
-              ties: s.ties,
-              current_streak: s.current_streak,
-              streak_type: s.streak_type,
-              current_rank: s.current_rank,
-            });
+        if (standingsError) throw standingsError;
+        standings?.forEach((s) => {
+          standingsMap.set(s.user_id, {
+            total_points: s.total_points,
+            wins: s.wins,
+            losses: s.losses,
+            ties: s.ties,
+            current_streak: s.current_streak,
+            streak_type: s.streak_type,
+            current_rank: s.current_rank,
           });
-        }
+        });
       }
 
-      // 6. Fetch weekly scores for current week
-      let weeklyScoresMap = new Map<string, number>();
+      const weeklyScoresMap = new Map<string, number>();
       if (currentWeek) {
-        const { data: weeklyScores } = await supabase
+        const { data: weeklyScores, error: scoresError } = await supabase
           .from('weekly_scores')
           .select('user_id, total_points')
           .eq('week_id', currentWeek.id);
 
-        if (weeklyScores) {
-          weeklyScores.forEach((ws) => {
-            weeklyScoresMap.set(ws.user_id, ws.total_points);
-          });
-        }
+        if (scoresError) throw scoresError;
+        weeklyScores?.forEach((ws) => {
+          weeklyScoresMap.set(ws.user_id, ws.total_points);
+        });
       }
 
-      // 7. Combine member data with standings and weekly scores
       const membersWithDetails: LeagueMemberWithProfile[] = (members || []).map((m) => {
         const profile = m.profiles as { display_name: string | null; avatar_url: string | null } | null;
         const standing = standingsMap.get(m.user_id);
@@ -192,12 +186,15 @@ export function useLeagueDetails(leagueId?: string) {
         };
       });
 
-      // Sort by total points descending and assign ranks
-      membersWithDetails.sort((a, b) => b.total_points - a.total_points);
-      membersWithDetails.forEach((m, index) => {
-        if (!m.current_rank) {
-          m.current_rank = index + 1;
-        }
+      // Fantasy standings are record-first, with season points as a tiebreaker.
+      membersWithDetails.sort((a, b) =>
+        b.wins - a.wins ||
+        b.ties - a.ties ||
+        b.total_points - a.total_points ||
+        a.losses - b.losses
+      );
+      membersWithDetails.forEach((member, index) => {
+        if (!member.current_rank) member.current_rank = index + 1;
       });
 
       return {
@@ -228,10 +225,10 @@ export function useLeagueDetails(leagueId?: string) {
       };
     },
     enabled: !!user && !!leagueId,
+    staleTime: 15_000,
   });
 }
 
-// Hook to get the user's primary league (first one they're a member of)
 export function useUserPrimaryLeague() {
   const { user } = useAuth();
 
@@ -251,7 +248,6 @@ export function useUserPrimaryLeague() {
   });
 
   const primaryLeagueId = memberships?.[0]?.league_id;
-  
   const leagueDetails = useLeagueDetails(primaryLeagueId);
 
   return {
