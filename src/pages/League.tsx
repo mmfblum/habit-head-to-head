@@ -5,8 +5,9 @@ import { LeaderboardRow } from '@/components/LeaderboardRow';
 import { useUserPrimaryLeague, LeagueMemberWithProfile } from '@/hooks/useLeagueDetails';
 import { useWeekMatchups } from '@/hooks/useCurrentMatchup';
 import { useIsLeagueAdmin } from '@/hooks/useLeagueTaskConfigs';
+import { useStartSeason } from '@/hooks/useSeasonActions';
 import { useAuth } from '@/hooks/useAuth';
-import { Trophy, Share2, Settings, Swords, Loader2, Zap } from 'lucide-react';
+import { Trophy, Share2, Settings, Swords, Loader2, Zap, Play, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { ManageTasksDialog } from '@/components/league/ManageTasksDialog';
 import { InitialTaskSetupDialog } from '@/components/league/InitialTaskSetupDialog';
@@ -22,9 +23,13 @@ export default function League() {
   const { data: isAdmin } = useIsLeagueAdmin(leagueId);
   const [showManageTasks, setShowManageTasks] = useState(false);
   const [showInitialSetup, setShowInitialSetup] = useState(false);
+  const startSeason = useStartSeason();
 
-  const { data: taskConfigs } = useLeagueTaskConfigs(league?.current_season?.id);
-  const { data: weekMatchups = [] } = useWeekMatchups(league?.current_week?.id);
+  const currentSeasonId = league?.current_season?.id;
+  const { data: taskConfigs } = useLeagueTaskConfigs(currentSeasonId);
+  const { data: weekMatchups = [] } = useWeekMatchups(
+    league?.current_season?.status === 'active' ? league?.current_week?.id : undefined
+  );
 
   if (isLoading) {
     return (
@@ -46,6 +51,12 @@ export default function League() {
     );
   }
 
+  const currentSeason = league.current_season;
+  const currentWeek = league.current_week;
+  const isDraft = currentSeason?.status === 'draft';
+  const isActive = currentSeason?.status === 'active';
+  const enabledTaskCount = taskConfigs?.filter(config => config.is_enabled).length ?? 0;
+
   const sortedMembers = [...league.members].sort((a, b) =>
     (a.current_rank ?? 999) - (b.current_rank ?? 999) ||
     b.wins - a.wins ||
@@ -54,8 +65,6 @@ export default function League() {
   );
   const weeklySorted = [...league.members].sort((a, b) => b.weekly_points - a.weekly_points);
   const lowestScorer = weeklySorted.length > 1 ? weeklySorted[weeklySorted.length - 1] : undefined;
-  const currentSeason = league.current_season;
-  const currentWeek = league.current_week;
 
   const scheduledIds = new Set(weekMatchups.flatMap(m => [m.user1_id, m.user2_id]));
   const byeMember = league.members.length > 1
@@ -106,8 +115,11 @@ export default function League() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">
-                {currentSeason ? `Season ${currentSeason.season_number}` : 'No Season'}
-                {currentWeek ? ` • Week ${currentWeek.week_number}` : ''}
+                {!currentSeason
+                  ? 'No season'
+                  : isDraft
+                    ? `Season ${currentSeason.season_number} • Preseason`
+                    : `Season ${currentSeason.season_number}${currentWeek ? ` • Week ${currentWeek.week_number}` : ''}`}
               </p>
               <h1 className="font-display font-bold text-xl">{league.name}</h1>
             </div>
@@ -140,30 +152,73 @@ export default function League() {
         {!currentSeason && (
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card-elevated rounded-xl p-6 text-center">
             <Trophy className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-            <h3 className="font-display font-semibold mb-2">Season Not Started</h3>
-            <p className="text-sm text-muted-foreground">The league admin needs to configure tasks and start the season.</p>
+            <h3 className="font-display font-semibold mb-2">Season Not Set Up</h3>
+            <p className="text-sm text-muted-foreground">The league admin needs to create the first season.</p>
           </motion.section>
         )}
 
-        {currentSeason?.status === 'draft' && isAdmin && (taskConfigs?.filter(c => c.is_enabled).length ?? 0) === 0 && (
+        {isDraft && isAdmin && enabledTaskCount === 0 && currentSeason && (
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="border-2 border-dashed border-primary/50 bg-primary/5">
               <CardContent className="py-6 text-center">
                 <Zap className="w-12 h-12 text-primary mx-auto mb-4" />
-                <h3 className="font-display font-bold text-lg mb-2">Complete Your League Setup</h3>
+                <h3 className="font-display font-bold text-lg mb-2">Set Your League Rules</h3>
                 <p className="text-muted-foreground mb-4 max-w-md mx-auto">
-                  Configure the tasks your members will track daily, then start the season.
+                  Choose the tasks and scoring rules first. Week 1 will not begin until you explicitly kick off the season.
                 </p>
                 <Button onClick={() => setShowInitialSetup(true)} size="lg">
                   <Zap className="w-4 h-4 mr-2" />
-                  Configure Tasks & Start Season
+                  Configure League Rules
                 </Button>
               </CardContent>
             </Card>
           </motion.section>
         )}
 
-        {currentWeek && weekMatchups.length > 0 && (
+        {isDraft && enabledTaskCount >= 3 && currentSeason && (
+          <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-secondary/5">
+              <CardContent className="py-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                    <Play className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] uppercase tracking-wider text-primary font-bold">Preseason</p>
+                    <h3 className="font-display font-bold text-lg mt-0.5">Ready for kickoff</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {league.members.length < 2
+                        ? 'Your rules are set. Invite at least one opponent before Week 1 can begin.'
+                        : `${league.members.length} players are in. Starting now will lock in the schedule and make today Day 1 of Week 1.`}
+                    </p>
+
+                    <div className="flex items-center gap-2 mt-4">
+                      {league.members.length < 2 ? (
+                        <Button onClick={copyInviteCode} className="gap-2">
+                          <Users className="w-4 h-4" />
+                          Copy Invite Code
+                        </Button>
+                      ) : isAdmin ? (
+                        <Button
+                          onClick={() => startSeason.mutate(currentSeason.id)}
+                          disabled={startSeason.isPending}
+                          className="gap-2"
+                        >
+                          {startSeason.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                          {startSeason.isPending ? 'Starting...' : 'Start Season 1'}
+                        </Button>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Waiting for the commissioner to start the season.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.section>
+        )}
+
+        {isActive && currentWeek && weekMatchups.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Swords className="w-4 h-4 text-secondary" />
@@ -225,7 +280,7 @@ export default function League() {
           <div className="flex items-center gap-2 mb-3">
             <Trophy className="w-4 h-4 text-pending" />
             <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-              {currentSeason ? 'Season Standings' : 'League Members'}
+              {isActive ? 'Season Standings' : 'League Members'}
             </h2>
           </div>
 
@@ -241,36 +296,34 @@ export default function League() {
                   user={memberToUser(member, index)}
                   index={index}
                   isCurrentUser={member.user_id === user?.id}
-                  isLowestScorer={sortedMembers.length > 1 && member.user_id === lowestScorer?.user_id}
+                  isLowestScorer={isActive && sortedMembers.length > 1 && member.user_id === lowestScorer?.user_id}
                 />
               ))}
             </div>
           )}
         </section>
 
-        {currentSeason && (
+        {isActive && currentSeason && currentWeek && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="card-elevated rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-semibold">Season Progress</span>
               <span className="text-xs text-muted-foreground">
-                Week {currentWeek?.week_number || 1} of {currentSeason.weeks_count}
+                Week {currentWeek.week_number} of {currentSeason.weeks_count}
               </span>
             </div>
             <div className="flex gap-1">
-              {Array.from({ length: currentSeason.weeks_count }).map((_, i) => {
-                const weekNum = currentWeek?.week_number || 1;
-                return (
-                  <div
-                    key={i}
-                    className={`flex-1 h-2 rounded-full ${
-                      i < weekNum - 1 ? 'bg-primary' : i === weekNum - 1 ? 'bg-primary/50 animate-pulse' : 'bg-muted'
-                    }`}
-                  />
-                );
-              })}
+              {Array.from({ length: currentSeason.weeks_count }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`flex-1 h-2 rounded-full ${
+                    i < currentWeek.week_number - 1 ? 'bg-primary' :
+                    i === currentWeek.week_number - 1 ? 'bg-primary/50 animate-pulse' : 'bg-muted'
+                  }`}
+                />
+              ))}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              {Math.max(currentSeason.weeks_count - (currentWeek?.week_number || 1), 0)} weeks remaining after this one
+              {Math.max(currentSeason.weeks_count - currentWeek.week_number, 0)} weeks remaining after this one
             </p>
           </motion.section>
         )}
