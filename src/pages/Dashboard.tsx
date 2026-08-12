@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { MatchupCard } from '@/components/MatchupCard';
 import { QuickStats } from '@/components/StatsGrid';
 import { TaskCard } from '@/components/TaskCard';
-import { ChevronRight, Zap, Bell, UserPlus } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Zap, Bell, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
@@ -27,21 +27,22 @@ function DashboardSkeleton() {
           </div>
         </div>
       </header>
-      <main className="px-4 py-4 space-y-6">
-        <Skeleton className="h-32 w-full rounded-xl" />
-        <div className="grid grid-cols-2 gap-3">
-          {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
-          ))}
-        </div>
+      <main className="px-4 py-4 space-y-5">
+        <Skeleton className="h-56 w-full rounded-2xl" />
+        <Skeleton className="h-20 w-full rounded-xl" />
         <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <Skeleton key={i} className="h-16 rounded-xl" />
-          ))}
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
         </div>
       </main>
     </div>
   );
+}
+
+function Avatar({ value, alt }: { value: string; alt: string }) {
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return <img src={value} alt={alt} className="w-full h-full object-cover" />;
+  }
+  return <span>{value}</span>;
 }
 
 export default function Dashboard() {
@@ -56,13 +57,8 @@ export default function Dashboard() {
   const seasonId = hasActiveSeason ? leagueDetails?.current_season?.id : undefined;
   const { data: realTasks = [], isLoading: tasksLoading } = useTasksWithCheckins(seasonId, new Date());
 
-  if (leagueLoading || matchupLoading) {
-    return <DashboardSkeleton />;
-  }
-
-  if (!leagueDetails) {
-    return <DashboardSkeleton />;
-  }
+  if (leagueLoading || matchupLoading) return <DashboardSkeleton />;
+  if (!leagueDetails) return <DashboardSkeleton />;
 
   const currentMember = leagueDetails.members.find(m => m.user_id === user?.id);
   const opponentId = scheduledMatchup
@@ -97,18 +93,39 @@ export default function Dashboard() {
     rank: opponentMember.current_rank ?? 2,
   } : null;
 
+  const scheduledUserScore = scheduledMatchup
+    ? scheduledMatchup.user1_id === user?.id
+      ? scheduledMatchup.user1_score
+      : scheduledMatchup.user2_score
+    : 0;
+  const scheduledOpponentScore = scheduledMatchup
+    ? scheduledMatchup.user1_id === user?.id
+      ? scheduledMatchup.user2_score
+      : scheduledMatchup.user1_score
+    : 0;
+
   const displayMatchup: Matchup | null = scheduledMatchup && displayOpponent ? {
     id: scheduledMatchup.id,
     week: currentWeek?.week_number ?? 1,
     user: displayUser,
     opponent: displayOpponent,
-    userScore: currentMember?.weekly_points ?? 0,
-    opponentScore: opponentMember?.weekly_points ?? 0,
-    status: scheduledMatchup.status === 'completed' ? 'completed' : 'in_progress',
+    userScore: scheduledUserScore,
+    opponentScore: scheduledOpponentScore,
+    status: scheduledMatchup.status === 'completed'
+      ? 'completed'
+      : scheduledMatchup.status === 'scheduled'
+        ? 'upcoming'
+        : 'in_progress',
   } : null;
 
   const transformedTasks: Task[] = realTasks.map(task => {
-    const config = task.config as { target?: number; threshold?: number; max_points?: number; points_per_unit?: number } | null;
+    const config = task.config as {
+      target?: number;
+      threshold?: number;
+      max_points?: number;
+      daily_cap?: number;
+      points_per_unit?: number;
+    } | null;
     const target = config?.target ?? config?.threshold ?? 1;
     const numericValue = task.todayCheckin?.numeric_value;
     const durationValue = task.todayCheckin?.duration_minutes;
@@ -124,7 +141,7 @@ export default function Dashboard() {
       target,
       unit: task.template?.unit ?? 'count',
       pointsPerUnit: config?.points_per_unit ?? 1,
-      maxPoints: config?.max_points ?? 100,
+      maxPoints: config?.max_points ?? config?.daily_cap ?? 100,
       currentValue,
       completed: !!task.todayCheckin?.boolean_value || currentValue >= target,
       streakDays: 0,
@@ -133,13 +150,17 @@ export default function Dashboard() {
 
   const todayTasks = transformedTasks.slice(0, 3);
   const completedCount = transformedTasks.filter(t => t.completed).length;
+  const nextTask = transformedTasks.find(t => !t.completed);
 
   const statsProps = {
     rank: currentMember?.current_rank ?? 1,
     totalMembers: Math.max(totalMembers, 1),
-    weeklyScore: currentMember?.weekly_points ?? 0,
+    weeklyScore: scheduledMatchup ? scheduledUserScore : currentMember?.weekly_points ?? 0,
+    wins: currentMember?.wins ?? 0,
+    losses: currentMember?.losses ?? 0,
+    ties: currentMember?.ties ?? 0,
     streak: currentMember?.current_streak ?? 0,
-    seasonPoints: currentMember?.total_points ?? 0,
+    streakType: currentMember?.streak_type,
     weekNumber: currentWeek?.week_number ?? 1,
     weeksCount: leagueDetails.current_season?.weeks_count ?? 1,
   };
@@ -169,27 +190,21 @@ export default function Dashboard() {
               className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-lg overflow-hidden"
               aria-label="Profile"
             >
-              {displayUser.avatar}
+              <Avatar value={displayUser.avatar} alt={displayUser.username} />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="px-4 py-4 space-y-6">
+      <main className="px-4 py-4 space-y-5">
         <section>
           {displayMatchup ? (
-            <>
-              <div
-                className="flex items-center justify-between mb-3 cursor-pointer"
-                onClick={() => navigate('/matchup')}
-              >
-                <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-                  Current Matchup
-                </h2>
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              </div>
-              <MatchupCard matchup={displayMatchup} compact />
-            </>
+            <MatchupCard
+              matchup={displayMatchup}
+              compact
+              weekEndDate={currentWeek?.end_date}
+              onClick={() => navigate('/matchup')}
+            />
           ) : (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -221,12 +236,39 @@ export default function Dashboard() {
           )}
         </section>
 
-        <section>
-          <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">
-            Your Stats
-          </h2>
-          <QuickStats {...statsProps} />
-        </section>
+        {hasActiveSeason && transformedTasks.length > 0 && (
+          <motion.button
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => navigate('/tasks')}
+            className={`w-full p-4 rounded-xl border text-left flex items-center gap-3 ${
+              nextTask
+                ? 'bg-secondary/10 border-secondary/25'
+                : 'bg-primary/10 border-primary/25'
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              nextTask ? 'bg-secondary/20' : 'bg-primary/20'
+            }`}>
+              {nextTask ? <Zap className="w-5 h-5 text-secondary" /> : <CheckCircle2 className="w-5 h-5 text-primary" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                {nextTask ? 'Make a move' : 'Perfect day'}
+              </p>
+              <p className="font-semibold text-sm truncate">
+                {nextTask ? `Finish ${nextTask.name}` : 'Every task is complete'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {nextTask
+                  ? `${nextTask.currentValue.toLocaleString()} of ${nextTask.target.toLocaleString()} ${nextTask.unit}`
+                  : `${completedCount}/${transformedTasks.length} tasks completed today`}
+              </p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </motion.button>
+        )}
 
         <section>
           <div
@@ -252,9 +294,7 @@ export default function Dashboard() {
             </div>
           ) : todayTasks.length > 0 ? (
             <div className="space-y-3">
-              {todayTasks.map(task => (
-                <TaskCard key={task.id} task={task} />
-              ))}
+              {todayTasks.map(task => <TaskCard key={task.id} task={task} />)}
             </div>
           ) : (
             <button
@@ -283,7 +323,19 @@ export default function Dashboard() {
           )}
         </section>
 
-        {displayMatchup && currentWeek && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+              Season Snapshot
+            </h2>
+            <button onClick={() => navigate('/league')} className="text-xs text-primary font-medium">
+              Standings
+            </button>
+          </div>
+          <QuickStats {...statsProps} />
+        </section>
+
+        {displayMatchup && scheduledMatchup?.status !== 'completed' && currentWeek && (
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -298,7 +350,7 @@ export default function Dashboard() {
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-sm">Power Play</p>
-                <p className="text-xs text-muted-foreground">Open your matchup to choose a weekly boost</p>
+                <p className="text-xs text-muted-foreground">Choose your weekly boost before the clock runs out</p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </div>
