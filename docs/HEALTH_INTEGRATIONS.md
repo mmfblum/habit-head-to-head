@@ -1,75 +1,99 @@
-# Zrizin device-data integration plan
+# Zrizin native health integrations
 
-Zrizin's web/PWA build must not pretend it can read protected health or screen-time data. Automatic tracking belongs in the native mobile shell and feeds the existing verified check-in/scoring pipeline.
+Zrizin now has real native Steps and Workout readers in the committed Capacitor iOS/Android projects. The web/PWA intentionally remains manual because browsers cannot read protected HealthKit/Health Connect stores.
 
-## iOS
+## What is implemented
 
-### Steps, runs, workouts
-Use HealthKit from the native iOS target.
+The React scoring surface uses `src/lib/nativeHealthBridge.ts` to call the native Capacitor plugin named `ZrizinHealth`.
 
-- Request only the read permissions needed by selected league tasks.
-- Daily Steps maps to HealthKit step-count samples.
-- Workout / runs map to HealthKit workout records (duration, activity type, route/distance where permitted).
-- Normalize the device-local day before sending a daily snapshot to the React app.
+On today's Tasks screen, **Sync today**:
+
+1. requests only Steps and Workout access;
+2. reads a device-local daily aggregate;
+3. maps device Steps to Zrizin's Steps task and total workout minutes to the Workout task;
+4. upserts those values through the existing authenticated `daily_checkins` mutation;
+5. attaches `apple_health` or `health_connect` source metadata; and
+6. lets the normal database trigger create `scoring_events`, weekly totals, matchup/leaderboard state, and celebrations.
+
+There is no separate native scoring engine and no direct write to standings or matchup totals.
+
+## iOS — Apple HealthKit
+
+Implemented in `ios/App/App/AppDelegate.swift` as the native `ZrizinHealth` Capacitor plugin.
+
+Current reads:
+
+- `HKQuantityTypeIdentifier.stepCount` via a cumulative daily `HKStatisticsQuery`;
+- `HKWorkout` records for the selected local day;
+- workout duration and basic activity labels;
+- workout distance when HealthKit supplies it.
+
+`Info.plist` includes `NSHealthShareUsageDescription`. Zrizin requests read access only; it does not write health data.
+
+### Remaining iOS release setup
+
+A signed device build still needs the **HealthKit capability/entitlement** enabled for bundle id `com.zrizin.app` in the Apple Developer/Xcode signing configuration. That cannot be validated truthfully by an unsigned simulator build.
+
+After the capability is attached, test on a physical iPhone with representative Apple Health data and verify permission denial, partial data, same-day resync, timezone/day boundaries, and edited/deleted Health data.
 
 Official references:
+
 - https://developer.apple.com/documentation/healthkit
 - https://developer.apple.com/documentation/healthkit/setting-up-healthkit
 - https://developer.apple.com/documentation/healthkit/hkquantitytypeidentifier/stepcount
 
-### Screen time
-Use Apple's Screen Time frameworks, primarily DeviceActivity + FamilyControls. This requires native entitlements/authorization and may require an app extension; it is not a normal browser API.
+## Android — Health Connect
+
+Implemented in `android/app/src/main/java/com/zrizin/app/ZrizinHealthPlugin.java` and registered from `MainActivity`.
+
+The current first release path uses Android 14+ system Health Connect APIs:
+
+- `android.permission.health.READ_STEPS`;
+- `android.permission.health.READ_EXERCISE`;
+- daily `StepsRecord` aggregation;
+- `ExerciseSessionRecord` duration aggregation.
+
+The Android manifest also declares the Health Connect package query and permission-usage intent required by the platform flow.
+
+### Remaining Android release setup
+
+The current native reader deliberately targets Android 14+ first. Older supported Android versions keep manual scoring until the Jetpack Health Connect compatibility path is added and device-tested.
+
+Before Play Store release, replace the temporary permission-usage destination with Zrizin's final privacy-policy/health-permissions screen and complete the Play Console Health Apps declaration.
 
 Official references:
-- https://developer.apple.com/documentation/deviceactivity
-- https://developer.apple.com/documentation/familycontrols
 
-## Android
-
-### Steps, runs, workouts
-Use Health Connect.
-
-- Steps maps to `StepsRecord`.
-- Workouts map to exercise-session records and associated metrics.
-- Android 14+ Health Connect can provide on-device step data when the user grants the relevant permission.
-
-Official references:
 - https://developer.android.com/health-and-fitness/guides/health-connect
-- https://developer.android.com/health-and-fitness/guides/health-connect/develop/exercise-routes
 - https://developer.android.com/health-and-fitness/guides/health-connect/develop/read-data
+- https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started
 
-### Screen time
-Use `UsageStatsManager`. The user must explicitly grant usage access in Android Settings.
+## Screen Time
+
+Screen Time is **not** being represented as a working health integration yet.
+
+### iOS
+
+Apple Screen Time is separate from HealthKit. A real implementation requires the Family Controls entitlement plus Screen Time frameworks such as `FamilyControls`, `DeviceActivity`, and `ManagedSettings`, and normally one or more app extensions. The entitlement is restricted and must be approved for the shipping app. Until that work is approved and real-device tested, Screen Time remains manual.
+
+Official references:
+
+- https://developer.apple.com/documentation/familycontrols
+- https://developer.apple.com/documentation/deviceactivity
+- https://developer.apple.com/documentation/managedsettings
+
+### Android
+
+Android usage-time data is available through `UsageStatsManager`, but it requires the user to grant special Usage Access in Settings. That integration remains a later native task; Zrizin does not claim it is connected today.
 
 Official reference:
+
 - https://developer.android.com/reference/android/app/usage/UsageStatsManager
 
-## React/native bridge already added
+## Integrity and privacy rules
 
-`src/lib/nativeHealthBridge.ts` defines the contract the native shell exposes to the React app:
-
-- request permission for `steps`, `workouts`, and/or `screen_time_minutes`
-- read one normalized daily snapshot
-- identify the native platform/source
-
-The current browser build intentionally returns no bridge. A future Capacitor/native implementation should install `window.ZrizinHealth` and keep platform SDK code outside the React scoring layer.
-
-## Scoring rules
-
-Automatic data must enter Zrizin through the same `daily_checkins` → verification → `scoring_events` path as manual data. Never write directly to matchup totals.
-
-Recommended sync behavior:
-
-1. Read the latest device snapshot.
-2. Upsert the applicable daily check-in with source/timestamp metadata.
-3. Let the database scoring trigger recalculate the score.
-4. Re-sync when HealthKit / Health Connect data changes.
-5. Preserve manual fallback only where the league rules permit it.
-
-## Privacy defaults
-
-- Ask only for metrics corresponding to tasks the player actually uses.
-- Keep raw device detail on-device when a daily aggregate is enough.
-- Make the source visible on the scored check-in.
-- Let users revoke/disconnect without breaking manual tasks.
-- Do not claim background sync until the native implementation and OS scheduling behavior are tested on real devices.
+- Ask only for device metrics Zrizin can actually use.
+- Keep detailed workout samples on-device when a daily aggregate is sufficient for scoring.
+- Store the aggregate check-in and its source, not an unnecessary copy of the user's entire health history.
+- Manual web scoring remains available where league rules allow it.
+- A later background-sync feature must still use the same check-in/scoring pipeline; it may never write scores directly.
+- Do not market automatic/background tracking until real-device lifecycle behavior has been verified on both platforms.
