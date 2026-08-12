@@ -3,7 +3,7 @@ import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BinaryCheckinInputProps {
-  value: boolean;
+  value?: boolean;
   onChange: (value: boolean) => void;
   disabled?: boolean;
   label?: string;
@@ -19,7 +19,7 @@ export function BinaryCheckinInput({ value, onChange, disabled = false, label = 
           onClick={() => !disabled && onChange(false)}
           className={cn(
             'h-11 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition-all border',
-            !value
+            value === false
               ? 'bg-loss/10 text-loss border-loss/30'
               : 'bg-muted/60 text-muted-foreground border-border hover:bg-muted'
           )}
@@ -33,7 +33,7 @@ export function BinaryCheckinInput({ value, onChange, disabled = false, label = 
           onClick={() => !disabled && onChange(true)}
           className={cn(
             'h-11 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all border',
-            value
+            value === true
               ? 'bg-primary text-primary-foreground border-primary shadow-[0_0_20px_hsl(var(--primary)/0.2)]'
               : 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20'
           )}
