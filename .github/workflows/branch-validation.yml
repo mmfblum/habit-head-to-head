@@ -1,0 +1,24 @@
+name: Branch Validation
+
+on:
+  push:
+    branches:
+      - agent/competitive-loop-foundation
+    paths:
+      - .github/branch-validation.trigger
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/competitive-loop-foundation
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
