@@ -1,14 +1,26 @@
 import { motion } from 'framer-motion';
 import { CheckinCard } from './CheckinCard';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePowerUps } from '@/hooks/usePowerUps';
 import type { TaskWithTemplate } from '@/types/checkin';
 
 interface DailyCheckinListProps {
   tasks: TaskWithTemplate[];
   isLoading: boolean;
+  weekId?: string;
+  powerPlayEnabled?: boolean;
 }
 
-export function DailyCheckinList({ tasks, isLoading }: DailyCheckinListProps) {
+export function DailyCheckinList({ tasks, isLoading, weekId, powerPlayEnabled = false }: DailyCheckinListProps) {
+  const {
+    availablePowerups,
+    armedPowerups,
+    activatePowerUp,
+  } = usePowerUps(powerPlayEnabled ? weekId : undefined);
+
+  const availablePowerPlay = availablePowerups.find((powerup) => powerup.powerup_type === 'multiplier');
+  const hasArmedPowerPlay = armedPowerups.some((powerup) => powerup.powerup_type === 'multiplier');
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -33,14 +45,11 @@ export function DailyCheckinList({ tasks, isLoading }: DailyCheckinListProps) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">No tasks configured for this season.</p>
-        <p className="text-sm text-muted-foreground/70 mt-1">
-          Ask your league admin to add tasks.
-        </p>
+        <p className="text-sm text-muted-foreground/70 mt-1">Ask your league admin to add tasks.</p>
       </div>
     );
   }
 
-  // Group tasks by category
   const groupedTasks = tasks.reduce((acc, task) => {
     const category = task.template?.category || 'custom';
     if (!acc[category]) acc[category] = [];
@@ -61,8 +70,8 @@ export function DailyCheckinList({ tasks, isLoading }: DailyCheckinListProps) {
   };
 
   const categoryOrder = [
-    'fitness', 'sleep', 'mindfulness', 'learning', 
-    'productivity', 'wellness', 'nutrition', 'social', 'custom'
+    'fitness', 'sleep', 'mindfulness', 'learning',
+    'productivity', 'wellness', 'nutrition', 'social', 'custom',
   ];
 
   const sortedCategories = Object.keys(groupedTasks).sort(
@@ -77,16 +86,34 @@ export function DailyCheckinList({ tasks, isLoading }: DailyCheckinListProps) {
             {categoryLabels[category] || category}
           </h2>
           <div className="space-y-3">
-            {groupedTasks[category].map((task, index) => (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <CheckinCard task={task} />
-              </motion.div>
-            ))}
+            {groupedTasks[category].map((task, index) => {
+              const armedForTask = armedPowerups.some(
+                (powerup) => powerup.powerup_type === 'multiplier' && powerup.task_instance_id === task.id
+              );
+              const canArmPowerPlay = powerPlayEnabled
+                && !!availablePowerPlay
+                && !hasArmedPowerPlay
+                && !task.todayCheckin;
+
+              return (
+                <motion.div
+                  key={task.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <CheckinCard
+                    task={task}
+                    powerPlayAvailable={canArmPowerPlay}
+                    powerPlayArmed={armedForTask}
+                    powerPlayPending={activatePowerUp.isPending}
+                    onArmPowerPlay={availablePowerPlay
+                      ? () => activatePowerUp.mutate({ powerup: availablePowerPlay, taskInstanceId: task.id })
+                      : undefined}
+                  />
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       ))}
