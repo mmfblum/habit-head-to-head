@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { BottomNav } from "./components/BottomNav";
+import { NativePushPrompt } from "./components/NativePushPrompt";
 import Index from "./pages/Index";
 import Tasks from "./pages/Tasks";
 import League from "./pages/League";
@@ -25,7 +26,7 @@ const queryClient = new QueryClient();
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -33,11 +34,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
+
   if (!user) {
     return <Navigate to={`/auth${location.search}`} replace />;
   }
-  
+
   return <>{children}</>;
 }
 
@@ -50,7 +51,7 @@ function AuthRoute() {
 
 function LeagueGate({ children }: { children: React.ReactNode }) {
   const { data: leagues, isLoading, isError, refetch } = useUserLeagues();
-  
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -58,12 +59,12 @@ function LeagueGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
+
   if (isError) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <p className="text-muted-foreground">Couldn't load your leagues</p>
-        <button 
+        <button
           onClick={() => refetch()}
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
         >
@@ -72,11 +73,11 @@ function LeagueGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
+
   if (!leagues || leagues.length === 0) {
     return <Onboarding />;
   }
-  
+
   return <>{children}</>;
 }
 
@@ -101,7 +102,8 @@ function HeadToHeadOnly({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   const { user } = useAuth();
   const location = useLocation();
-  
+  const isPublicAccountability = location.pathname.startsWith('/accountability/');
+
   return (
     <div className="min-h-screen bg-background">
       <Routes>
@@ -185,7 +187,8 @@ function AppRoutes() {
         />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {user && !location.pathname.startsWith('/accountability/') && <BottomNav />}
+      {user && !isPublicAccountability && <NativePushPrompt />}
+      {user && !isPublicAccountability && <BottomNav />}
     </div>
   );
 }
