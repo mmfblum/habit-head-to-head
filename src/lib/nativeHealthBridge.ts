@@ -31,11 +31,13 @@ export interface ZrizinNativeHealthBridge {
   platform: NativeHealthPlatform;
   requestAuthorization(metrics: HealthMetric[]): Promise<HealthAuthorizationResult>;
   readDailySnapshot(date: string): Promise<DailyHealthSnapshot>;
+  openScreenTimeSettings?(): Promise<void>;
 }
 
 interface NativeHealthPlugin {
   requestAuthorization(options: { metrics: HealthMetric[] }): Promise<HealthAuthorizationResult>;
   readDailySnapshot(options: { date: string }): Promise<DailyHealthSnapshot>;
+  openScreenTimeSettings(): Promise<void>;
 }
 
 const CapacitorHealth = registerPlugin<NativeHealthPlugin>('ZrizinHealth');
@@ -61,6 +63,9 @@ export function getNativeHealthBridge(): ZrizinNativeHealthBridge | null {
         platform,
         requestAuthorization: (metrics) => CapacitorHealth.requestAuthorization({ metrics }),
         readDailySnapshot: (date) => CapacitorHealth.readDailySnapshot({ date }),
+        openScreenTimeSettings: platform === 'android'
+          ? () => CapacitorHealth.openScreenTimeSettings()
+          : undefined,
       };
     }
   }
@@ -75,5 +80,5 @@ export function hasNativeHealthBridge(): boolean {
 export function getHealthIntegrationLabel(): string {
   const bridge = getNativeHealthBridge();
   if (!bridge) return 'Manual tracking on web';
-  return bridge.platform === 'ios' ? 'Apple Health available' : 'Health Connect available';
+  return bridge.platform === 'ios' ? 'Apple Health available' : 'Health Connect + Usage Access available';
 }
