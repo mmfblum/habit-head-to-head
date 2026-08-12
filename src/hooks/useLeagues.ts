@@ -172,13 +172,21 @@ export function useJoinLeague() {
     mutationFn: async (inviteCode: string) => {
       if (!user) throw new Error('Must be logged in');
 
-      const { data, error } = await supabase.rpc(
+      const { data: leagueId, error } = await supabase.rpc(
         'join_league_by_code' as never,
         { _invite_code: inviteCode.trim() } as never
       );
 
       if (error) throw error;
-      return data as unknown as string;
+      if (!leagueId) throw new Error('League join did not return a league ID');
+
+      const { data: league, error: leagueError } = await supabase
+        .from('leagues')
+        .select('*')
+        .eq('id', leagueId as unknown as string)
+        .single();
+      if (leagueError) throw leagueError;
+      return league;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
