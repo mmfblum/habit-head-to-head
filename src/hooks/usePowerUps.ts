@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -64,6 +65,33 @@ export function usePowerUps(weekId?: string) {
     enabled: !!weekId && !!user,
     staleTime: 10_000,
   });
+
+  useEffect(() => {
+    if (!weekId || !user?.id) return;
+
+    const channel = supabase
+      .channel(`powerups-${weekId}-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'powerups',
+          filter: `week_id=eq.${weekId}`,
+        },
+        (payload) => {
+          const changed = (payload.new || payload.old) as any;
+          if (changed?.user_id === user.id) {
+            queryClient.invalidateQueries({ queryKey });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [weekId, user?.id, queryClient]);
 
   const activatePowerUp = useMutation({
     mutationFn: async ({
