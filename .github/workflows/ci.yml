@@ -8,6 +8,9 @@ on:
       - main
       - 'agent/**'
 
+permissions:
+  contents: write
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -16,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha }}
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -23,18 +28,22 @@ jobs:
           node-version: 20
           cache: npm
 
-      # The existing package-lock predates several package.json changes. Refresh
-      # it once on this branch so we can capture the canonical npm lock and then
-      # return CI to strict `npm ci` installs.
+      # One-time repair for the stale Lovable-era npm lockfile. On same-repo push
+      # runs this commits the canonical generated lock back to the branch. Once
+      # package-lock.json is synchronized this step becomes a no-op.
       - name: Refresh npm lockfile
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
-      - name: Upload refreshed lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-lock
-          path: package-lock.json
-          retention-days: 1
+      - name: Commit refreshed lockfile
+        if: github.event_name == 'push'
+        run: |
+          if ! git diff --quiet -- package-lock.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "Sync npm lockfile"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
 
       - name: Install dependencies
         run: npm ci
@@ -42,8 +51,8 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Lint
-        run: npm run lint
-
       - name: Build
         run: npm run build
+
+      - name: Lint
+        run: npm run lint
