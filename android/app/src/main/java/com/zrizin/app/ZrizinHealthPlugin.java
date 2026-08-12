@@ -51,12 +51,25 @@ public class ZrizinHealthPlugin extends Plugin {
 
     @PluginMethod
     public void requestAuthorization(PluginCall call) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && requestsHealthMetrics(call)) {
             requestAllPermissions(call, "healthPermissionsCallback");
             return;
         }
 
         resolveAuthorization(call);
+    }
+
+    private boolean requestsHealthMetrics(PluginCall call) {
+        JSArray requested = call.getArray("metrics", new JSArray());
+        try {
+            for (Object value : requested.toList()) {
+                String metric = String.valueOf(value);
+                if ("steps".equals(metric) || "workouts".equals(metric)) return true;
+            }
+        } catch (JSONException ignored) {
+            return false;
+        }
+        return false;
     }
 
     @PermissionCallback
