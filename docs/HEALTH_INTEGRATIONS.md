@@ -1,19 +1,21 @@
-# Zrizin native health integrations
+# Zrizin native health and device integrations
 
-Zrizin now has real native Steps and Workout readers in the committed Capacitor iOS/Android projects. The web/PWA intentionally remains manual because browsers cannot read protected HealthKit/Health Connect stores.
+Zrizin now has real native Steps and Workout readers in the committed Capacitor iOS/Android projects, plus Android Screen Time import through system Usage Access. The web/PWA intentionally remains manual because browsers cannot read these protected device stores.
 
 ## What is implemented
 
 The React scoring surface uses `src/lib/nativeHealthBridge.ts` to call the native Capacitor plugin named `ZrizinHealth`.
 
-On today's Tasks screen, **Sync today**:
+On today's Tasks screen, **Connect & sync / Refresh device data**:
 
-1. requests only Steps and Workout access;
+1. requests only the device metrics represented on the current scorecard;
 2. reads a device-local daily aggregate;
-3. maps device Steps to Zrizin's Steps task and total workout minutes to the Workout task;
-4. upserts those values through the existing authenticated `daily_checkins` mutation;
-5. attaches `apple_health` or `health_connect` source metadata; and
+3. maps device Steps, Workout minutes, and supported Screen Time into the matching Zrizin tasks;
+4. upserts only changed values through the existing authenticated `daily_checkins` mutation;
+5. attaches `apple_health`, `health_connect`, or `android_usage` source metadata; and
 6. lets the normal database trigger create `scoring_events`, weekly totals, matchup/leaderboard state, and celebrations.
+
+After an explicit successful connection, opening Today's Scorecard may refresh connected metrics quietly. Unchanged aggregates are not rewritten, which avoids artificial scoring/feed churn.
 
 There is no separate native scoring engine and no direct write to standings or matchup totals.
 
@@ -55,11 +57,11 @@ The current first release path uses Android 14+ system Health Connect APIs:
 
 The Android manifest also declares the Health Connect package query and permission-usage intent required by the platform flow.
 
-### Remaining Android release setup
+### Remaining Android Health Connect release setup
 
-The current native reader deliberately targets Android 14+ first. Older supported Android versions keep manual scoring until the Jetpack Health Connect compatibility path is added and device-tested.
+The current Health Connect reader deliberately targets Android 14+ first. Older Android versions can still use Android Screen Time below, but Steps/Workout remain manual until the Jetpack Health Connect compatibility path is added and device-tested.
 
-Before Play Store release, replace the temporary permission-usage destination with Zrizin's final privacy-policy/health-permissions screen and complete the Play Console Health Apps declaration.
+Before Play Store release, replace the temporary health-permission destination with Zrizin's final privacy-policy/health-permissions screen and complete the Play Console Health Apps declaration.
 
 Official references:
 
@@ -69,11 +71,24 @@ Official references:
 
 ## Screen Time
 
-Screen Time is **not** being represented as a working health integration yet.
+### Android — implemented
 
-### iOS
+Zrizin now uses Android `UsageStatsManager` to calculate the selected day's aggregate app foreground minutes when the scorecard contains a **Screen Time** task.
 
-Apple Screen Time is separate from HealthKit. A real implementation requires the Family Controls entitlement plus Screen Time frameworks such as `FamilyControls`, `DeviceActivity`, and `ManagedSettings`, and normally one or more app extensions. The entitlement is restricted and must be approved for the shipping app. Until that work is approved and real-device tested, Screen Time remains manual.
+The manifest declares `android.permission.PACKAGE_USAGE_STATS`. This is a special app-op rather than an ordinary runtime permission, so the user must explicitly enable Zrizin under Android **Usage Access** settings. If access is missing during an explicit sync, Zrizin opens the appropriate system Settings screen and asks the user to return and refresh.
+
+The imported value is stored as a normal Screen Time numeric check-in with source `android_usage`. The task catalog allows `manual` and `android_usage` for Screen Time.
+
+This aggregate is based on Android-reported application foreground time; it should not be marketed as bit-for-bit identical to every OEM's Digital Wellbeing calculation until real-device comparisons are complete.
+
+Official references:
+
+- https://developer.android.com/reference/android/app/usage/UsageStatsManager
+- https://developer.android.com/reference/android/provider/Settings#ACTION_USAGE_ACCESS_SETTINGS
+
+### iOS — entitlement-bound
+
+Apple Screen Time is separate from HealthKit. A real implementation requires the Family Controls entitlement plus Screen Time frameworks such as `FamilyControls`, `DeviceActivity`, and `ManagedSettings`, and normally one or more app extensions. The entitlement is restricted and must be approved for the shipping app. Until that approval and real-device work exist, iOS Screen Time remains manual.
 
 Official references:
 
@@ -81,19 +96,11 @@ Official references:
 - https://developer.apple.com/documentation/deviceactivity
 - https://developer.apple.com/documentation/managedsettings
 
-### Android
-
-Android usage-time data is available through `UsageStatsManager`, but it requires the user to grant special Usage Access in Settings. That integration remains a later native task; Zrizin does not claim it is connected today.
-
-Official reference:
-
-- https://developer.android.com/reference/android/app/usage/UsageStatsManager
-
 ## Integrity and privacy rules
 
 - Ask only for device metrics Zrizin can actually use.
 - Keep detailed workout samples on-device when a daily aggregate is sufficient for scoring.
-- Store the aggregate check-in and its source, not an unnecessary copy of the user's entire health history.
+- Store the aggregate check-in and its source, not an unnecessary copy of the user's entire health or app-usage history.
 - Manual web scoring remains available where league rules allow it.
-- A later background-sync feature must still use the same check-in/scoring pipeline; it may never write scores directly.
-- Do not market automatic/background tracking until real-device lifecycle behavior has been verified on both platforms.
+- Automatic refresh still uses the same check-in/scoring pipeline; native code never writes points, standings, or matchup scores directly.
+- Do not market automatic/background tracking as fully validated until real-device lifecycle behavior has been verified on both platforms.
