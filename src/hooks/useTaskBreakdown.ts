@@ -21,6 +21,17 @@ interface UseTaskBreakdownOptions {
   opponentId?: string;
 }
 
+type LeagueTaskRelation = {
+  max_daily_points?: number | null;
+  task_templates?: {
+    icon?: string | null;
+  } | null;
+} | null;
+
+type RealtimeScoringPayload = {
+  user_id?: string | null;
+};
+
 export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTaskBreakdownOptions) {
   const queryClient = useQueryClient();
   const queryKey = ['task-breakdown', seasonId, weekId, userId, opponentId];
@@ -73,7 +84,7 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
       });
 
       const taskProgress: TaskProgress[] = (taskInstances || []).map((task) => {
-        const config = task.league_task_configs as any;
+        const config = task.league_task_configs as unknown as LeagueTaskRelation;
         const maxPoints = config?.max_daily_points || 100;
         const icon = config?.task_templates?.icon || '📋';
         const userPoints = userPointsMap.get(task.id) || 0;
@@ -118,8 +129,8 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
           filter: `week_id=eq.${weekId}`,
         },
         (payload) => {
-          const event = (payload.new || payload.old) as any;
-          if (event?.user_id === userId || event?.user_id === opponentId) {
+          const event = (payload.new || payload.old) as RealtimeScoringPayload;
+          if (event.user_id === userId || event.user_id === opponentId) {
             queryClient.invalidateQueries({ queryKey });
           }
         }
