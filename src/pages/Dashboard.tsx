@@ -2,7 +2,8 @@ import { motion } from 'framer-motion';
 import { MatchupCard } from '@/components/MatchupCard';
 import { QuickStats } from '@/components/StatsGrid';
 import { TaskCard } from '@/components/TaskCard';
-import { CheckCircle2, ChevronRight, Zap, Bell, UserPlus } from 'lucide-react';
+import { LeaderboardRaceCard } from '@/components/leaderboard/LeaderboardRaceCard';
+import { CheckCircle2, ChevronRight, Zap, Bell, UserPlus, Trophy, Target, CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
@@ -54,9 +55,12 @@ export default function Dashboard() {
   const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
   const { data: notifications = [] } = useNotifications();
 
+  const isLeaderboard = leagueDetails?.game_format === 'leaderboard';
   const currentWeek = leagueDetails?.current_week;
   const weekPhase = getCompetitionWeekPhase(currentWeek?.start_date, currentWeek?.end_date);
-  const { data: scheduledMatchup, isLoading: matchupLoading } = useCurrentMatchup(currentWeek?.id);
+  const { data: scheduledMatchup, isLoading: matchupLoading } = useCurrentMatchup(
+    isLeaderboard ? undefined : currentWeek?.id
+  );
 
   const hasActiveSeason = leagueDetails?.current_season?.status === 'active';
   const isLiveWeek = hasActiveSeason && weekPhase === 'live';
@@ -64,7 +68,7 @@ export default function Dashboard() {
   const { data: realTasks = [], isLoading: tasksLoading } = useTasksWithCheckins(seasonId, new Date());
   const unreadCount = notifications.filter((notification) => !notification.read_at).length;
 
-  if (leagueLoading || matchupLoading) return <DashboardSkeleton />;
+  if (leagueLoading || (!isLeaderboard && matchupLoading)) return <DashboardSkeleton />;
   if (!leagueDetails) return <DashboardSkeleton />;
 
   const currentMember = leagueDetails.members.find((member) => member.user_id === user?.id);
@@ -161,6 +165,12 @@ export default function Dashboard() {
   const completedCount = transformedTasks.filter((task) => task.completed).length;
   const nextTask = transformedTasks.find((task) => !task.completed);
 
+  const weeklySorted = [...leagueDetails.members].sort((a, b) => b.weekly_points - a.weekly_points);
+  const currentWeeklyIndex = weeklySorted.findIndex((member) => member.user_id === user?.id);
+  const weeklyRank = currentWeeklyIndex >= 0
+    ? weeklySorted.findIndex((member) => member.weekly_points === weeklySorted[currentWeeklyIndex].weekly_points) + 1
+    : undefined;
+
   const statsProps = {
     rank: currentMember?.current_rank ?? 1,
     totalMembers: Math.max(totalMembers, 1),
@@ -214,7 +224,14 @@ export default function Dashboard() {
 
       <main className="px-4 py-4 space-y-5">
         <section>
-          {displayMatchup ? (
+          {isLeaderboard && currentWeek ? (
+            <LeaderboardRaceCard
+              members={leagueDetails.members}
+              currentUserId={user?.id}
+              weekNumber={currentWeek.week_number}
+              onOpen={() => navigate('/league')}
+            />
+          ) : displayMatchup ? (
             <MatchupCard
               matchup={displayMatchup}
               compact
@@ -307,7 +324,9 @@ export default function Dashboard() {
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {hasActiveSeason && weekPhase === 'scheduled'
-                  ? 'Your matchup is set. Week 1 begins on Sunday.'
+                  ? isLeaderboard
+                    ? 'The leaderboard opens Sunday. Everyone starts the week at zero.'
+                    : 'Your matchup is set. Week 1 begins on Sunday.'
                   : isLiveWeek ? 'Open Tasks to review your league setup.' : 'Finish league setup to begin earning points.'}
               </p>
             </button>
@@ -329,10 +348,35 @@ export default function Dashboard() {
             <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">Season Snapshot</h2>
             <button onClick={() => navigate('/league')} className="text-xs text-primary font-medium">Standings</button>
           </div>
-          <QuickStats {...statsProps} />
+          {isLeaderboard ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="card-elevated rounded-xl p-4">
+                <Trophy className="w-4 h-4 text-pending mb-2" />
+                <p className="score-text text-2xl">{currentMember?.current_rank ? `#${currentMember.current_rank}` : '—'}</p>
+                <p className="text-xs text-muted-foreground mt-1">Season rank</p>
+              </div>
+              <div className="card-elevated rounded-xl p-4">
+                <Target className="w-4 h-4 text-primary mb-2" />
+                <p className="score-text text-2xl">{weeklyRank ? `#${weeklyRank}` : '—'}</p>
+                <p className="text-xs text-muted-foreground mt-1">This week</p>
+              </div>
+              <div className="card-elevated rounded-xl p-4">
+                <Zap className="w-4 h-4 text-secondary mb-2" />
+                <p className="score-text text-2xl">{(currentMember?.weekly_points ?? 0).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">Week points</p>
+              </div>
+              <div className="card-elevated rounded-xl p-4">
+                <CalendarDays className="w-4 h-4 text-muted-foreground mb-2" />
+                <p className="score-text text-2xl">{(currentMember?.total_points ?? 0).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">Season points</p>
+              </div>
+            </div>
+          ) : (
+            <QuickStats {...statsProps} />
+          )}
         </section>
 
-        {displayMatchup && scheduledMatchup?.status === 'in_progress' && currentWeek && (
+        {!isLeaderboard && displayMatchup && scheduledMatchup?.status === 'in_progress' && currentWeek && (
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
