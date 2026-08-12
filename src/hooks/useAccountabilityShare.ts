@@ -41,11 +41,10 @@ export function useAccountabilityShare(leagueId?: string) {
     enabled: !!leagueId,
     queryFn: async (): Promise<ShareRow | null> => {
       if (!leagueId) return null;
-      const { data, error } = await supabase
-        .from('accountability_shares' as never)
-        .select('id,token,is_active')
-        .eq('league_id', leagueId)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc(
+        'get_my_accountability_share' as never,
+        { _league_id: leagueId } as never
+      );
       if (error) throw error;
       return data as unknown as ShareRow | null;
     },
