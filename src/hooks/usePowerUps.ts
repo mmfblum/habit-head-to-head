@@ -42,6 +42,10 @@ export const POWERUP_TYPES = {
 
 export type PowerUpType = keyof typeof POWERUP_TYPES;
 
+type RealtimePowerUpPayload = {
+  user_id?: string;
+};
+
 export function usePowerUps(weekId?: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -80,8 +84,8 @@ export function usePowerUps(weekId?: string) {
           filter: `week_id=eq.${weekId}`,
         },
         (payload) => {
-          const changed = (payload.new || payload.old) as any;
-          if (changed?.user_id === user.id) {
+          const changed = (payload.new || payload.old) as RealtimePowerUpPayload;
+          if (changed.user_id === user.id) {
             queryClient.invalidateQueries({ queryKey });
           }
         }
@@ -101,10 +105,13 @@ export function usePowerUps(weekId?: string) {
       powerup: PowerUp;
       taskInstanceId?: string;
     }) => {
-      const { error } = await (supabase as any).rpc('activate_powerup', {
-        _powerup_id: powerup.id,
-        _task_instance_id: taskInstanceId ?? null,
-      });
+      const { error } = await supabase.rpc(
+        'activate_powerup' as never,
+        {
+          _powerup_id: powerup.id,
+          _task_instance_id: taskInstanceId ?? null,
+        } as never
+      );
 
       if (error) throw error;
       return powerup;
