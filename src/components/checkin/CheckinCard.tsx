@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Flag, Shield, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, Flag, Shield, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useSubmitCheckin } from '@/hooks/useTasksWithCheckins';
 import { TASK_ICONS } from '@/types/checkin';
 import type { CheckinValue, TaskWithTemplate } from '@/types/checkin';
@@ -45,6 +46,14 @@ const FALLBACK_VERIFICATION: VerificationConfig = {
   description: '',
 };
 
+function numberFrom(record: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return undefined;
+}
+
 export function CheckinCard({ task, date }: CheckinCardProps) {
   const submitCheckin = useSubmitCheckin();
   const { toast } = useToast();
@@ -59,6 +68,7 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
   );
 
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [showExactEntry, setShowExactEntry] = useState(false);
   const [celebration, setCelebration] = useState<CelebrationState | null>(null);
   const [value, setValue] = useState<CheckinValue>(() => ({
     boolean_value: task.todayCheckin?.boolean_value ?? undefined,
@@ -82,10 +92,24 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
   const isCompleted = !!task.todayCheckin;
   const isPending = submitCheckin.isPending;
   const config = (task.config || {}) as Record<string, unknown>;
+  const templateDefaults = (task.template?.default_config || {}) as Record<string, unknown>;
   const minValue = task.template?.min_value ?? undefined;
   const maxValue = task.template?.max_value ?? undefined;
   const customDescription = typeof config.custom_description === 'string' ? config.custom_description : undefined;
   const description = customDescription || task.template?.description;
+  const scoringMode = typeof config.scoring_mode === 'string' ? config.scoring_mode : 'detailed';
+  const goalPoints = numberFrom(config, 'binary_points', 'points') ?? 3;
+  const goalTarget = numberFrom(config, 'target', 'threshold')
+    ?? numberFrom(templateDefaults, 'target', 'threshold');
+  const prefersExactEntry = config.prefer_exact_entry === true
+    || task.template?.unit === 'steps'
+    || config.daily_limit_minutes !== undefined
+    || task.task_name.toLowerCase().includes('screen time');
+  const canQuickScoreGoal = scoringMode === 'binary'
+    && (task.input_type === 'numeric' || task.input_type === 'duration')
+    && verificationConfig.method !== 'timer_based'
+    && !prefersExactEntry
+    && goalTarget !== undefined;
 
   const handleValueChange = useCallback((newValue: CheckinValue) => {
     setValue((previous) => ({ ...previous, ...newValue }));
@@ -159,6 +183,15 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
     } else {
       setNeedsConfirmation(true);
     }
+  };
+
+  const handleQuickGoal = async (hitGoal: boolean) => {
+    if (goalTarget === undefined) return;
+    const checkinValue: CheckinValue = task.input_type === 'duration'
+      ? { duration_minutes: hitGoal ? goalTarget : 0 }
+      : { numeric_value: hitGoal ? goalTarget : 0 };
+    setValue((previous) => ({ ...previous, ...checkinValue }));
+    await handleSubmit(checkinValue, 'manual', true);
   };
 
   const handleNumericChange = (newValue: number) => handleValueChange({ numeric_value: newValue });
@@ -259,6 +292,58 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
                 disabled={isPending}
                 capturesTimestamp
               />
+            ) : canQuickScoreGoal ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-11"
+                    onClick={() => handleQuickGoal(false)}
+                    disabled={isPending}
+                  >
+                    Missed
+                  </Button>
+                  <Button
+                    className="h-11 font-bold"
+                    onClick={() => handleQuickGoal(true)}
+                    disabled={isPending}
+                  >
+                    Done +{goalPoints}
+                  </Button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowExactEntry((current) => !current)}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+                >
+                  {showExactEntry ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  {showExactEntry ? 'Hide exact amount' : 'Log exact amount'}
+                </button>
+                <AnimatePresence initial={false}>
+                  {showExactEntry && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-1">
+                        {renderInput()}
+                        {needsScoreButton && (
+                          <div className="mt-3">
+                            <ConfirmationButton
+                              confirmationAction="log_score"
+                              isConfirmed={false}
+                              onConfirm={handleConfirmation}
+                              disabled={isPending}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             ) : (
               <>
                 {renderInput()}
