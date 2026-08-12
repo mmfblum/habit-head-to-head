@@ -1,14 +1,12 @@
-import { Home, Target, Trophy, Users, User, Bell, MessageSquare } from 'lucide-react';
+import { Home, Target, Trophy, Swords, MessageSquare } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
+  { icon: Swords, label: 'Matchup', path: '/matchup' },
   { icon: Target, label: 'Tasks', path: '/tasks' },
-  { icon: MessageSquare, label: 'Feed', path: '/feed' },
   { icon: Trophy, label: 'League', path: '/league' },
-  { icon: Users, label: 'Matchup', path: '/matchup' },
-  { icon: Bell, label: 'Alerts', path: '/notifications' },
-  { icon: User, label: 'Profile', path: '/profile' },
+  { icon: MessageSquare, label: 'Feed', path: '/feed' },
 ];
 
 export function BottomNav() {
@@ -21,7 +19,7 @@ export function BottomNav() {
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
-          
+
           return (
             <button
               key={item.path}
