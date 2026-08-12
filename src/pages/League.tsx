@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { LeaderboardRow } from '@/components/LeaderboardRow';
-import { useUserPrimaryLeague, LeagueMemberWithProfile } from '@/hooks/useLeagueDetails';
+import { useUserPrimaryLeague, type LeagueMemberWithProfile } from '@/hooks/useLeagueDetails';
 import { useWeekMatchups } from '@/hooks/useCurrentMatchup';
 import { useIsLeagueAdmin } from '@/hooks/useLeagueTaskConfigs';
 import { useStartSeason } from '@/hooks/useSeasonActions';
 import { useAuth } from '@/hooks/useAuth';
 import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';
-import { Trophy, Share2, Settings, Swords, Loader2, Zap, Play, Users, Clock } from 'lucide-react';
+import { Crown, ListOrdered, Trophy, Share2, Settings, Swords, Loader2, Zap, Play, Users, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { ManageTasksDialog } from '@/components/league/ManageTasksDialog';
 import { InitialTaskSetupDialog } from '@/components/league/InitialTaskSetupDialog';
@@ -30,8 +30,9 @@ export default function League() {
   const { data: taskConfigs } = useLeagueTaskConfigs(currentSeasonId);
   const currentWeek = league?.current_week;
   const weekPhase = getCompetitionWeekPhase(currentWeek?.start_date, currentWeek?.end_date);
+  const isLeaderboard = league?.game_format === 'leaderboard';
   const { data: weekMatchups = [] } = useWeekMatchups(
-    league?.current_season?.status === 'active' ? currentWeek?.id : undefined
+    !isLeaderboard && league?.current_season?.status === 'active' ? currentWeek?.id : undefined
   );
 
   if (isLoading) {
@@ -59,20 +60,27 @@ export default function League() {
   const isActive = currentSeason?.status === 'active';
   const isScheduledWeek = isActive && weekPhase === 'scheduled';
   const isLiveWeek = isActive && weekPhase === 'live';
-  const enabledTaskCount = taskConfigs?.filter(config => config.is_enabled).length ?? 0;
+  const enabledTaskCount = taskConfigs?.filter((config) => config.is_enabled).length ?? 0;
 
-  const sortedMembers = [...league.members].sort((a, b) =>
-    (a.current_rank ?? 999) - (b.current_rank ?? 999) ||
-    b.wins - a.wins ||
-    b.ties - a.ties ||
-    b.total_points - a.total_points
-  );
+  const sortedMembers = [...league.members].sort((a, b) => {
+    if (isLeaderboard) {
+      return b.total_points - a.total_points || b.weekly_points - a.weekly_points;
+    }
+    return (
+      (a.current_rank ?? 999) - (b.current_rank ?? 999) ||
+      b.wins - a.wins ||
+      b.ties - a.ties ||
+      b.total_points - a.total_points
+    );
+  });
   const weeklySorted = [...league.members].sort((a, b) => b.weekly_points - a.weekly_points);
-  const lowestScorer = isLiveWeek && weeklySorted.length > 1 ? weeklySorted[weeklySorted.length - 1] : undefined;
+  const lowestScorer = !isLeaderboard && isLiveWeek && weeklySorted.length > 1
+    ? weeklySorted[weeklySorted.length - 1]
+    : undefined;
 
-  const scheduledIds = new Set(weekMatchups.flatMap(m => [m.user1_id, m.user2_id]));
-  const byeMember = league.members.length > 1
-    ? league.members.find(member => !scheduledIds.has(member.user_id))
+  const scheduledIds = new Set(weekMatchups.flatMap((matchup) => [matchup.user1_id, matchup.user2_id]));
+  const byeMember = !isLeaderboard && league.members.length > 1
+    ? league.members.find((member) => !scheduledIds.has(member.user_id))
     : undefined;
 
   const nextWeekStart = currentWeek
@@ -112,13 +120,18 @@ export default function League() {
     rank: member.current_rank || rank + 1,
   });
 
+  const getWeeklyRank = (member: LeagueMemberWithProfile) =>
+    weeklySorted.findIndex((candidate) => candidate.weekly_points === member.weekly_points) + 1;
+
+  const weeklyLeaderScore = weeklySorted[0]?.weekly_points ?? 0;
+
   const headerEyebrow = !currentSeason
     ? 'No season'
     : isDraft
-      ? `Season ${currentSeason.season_number} • Preseason`
+      ? `Season ${currentSeason.season_number} • Preseason • ${isLeaderboard ? 'Leaderboard' : 'Head-to-Head'}`
       : isScheduledWeek && currentWeek
         ? `Season ${currentSeason.season_number} • Week ${currentWeek.week_number} starts ${formatWeekKickoff(currentWeek.start_date)}`
-        : `Season ${currentSeason.season_number}${currentWeek ? ` • Week ${currentWeek.week_number}` : ''}`;
+        : `Season ${currentSeason.season_number}${currentWeek ? ` • Week ${currentWeek.week_number}` : ''} • ${isLeaderboard ? 'Leaderboard' : 'Head-to-Head'}`;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -170,7 +183,7 @@ export default function League() {
                 <Zap className="w-12 h-12 text-primary mx-auto mb-4" />
                 <h3 className="font-display font-bold text-lg mb-2">Set Your League Rules</h3>
                 <p className="text-muted-foreground mb-4 max-w-md mx-auto">
-                  Choose the tasks and scoring rules first. Week 1 will not begin until you explicitly schedule the season.
+                  Choose the tasks and scoring rules first. Week 1 will not begin until you explicitly start the season.
                 </p>
                 <Button onClick={() => setShowInitialSetup(true)} size="lg">
                   <Zap className="w-4 h-4 mr-2" />
@@ -191,11 +204,15 @@ export default function League() {
                   </div>
                   <div className="flex-1">
                     <p className="text-[10px] uppercase tracking-wider text-primary font-bold">Preseason</p>
-                    <h3 className="font-display font-bold text-lg mt-0.5">Ready to set the schedule</h3>
+                    <h3 className="font-display font-bold text-lg mt-0.5">
+                      {isLeaderboard ? 'Ready to open the leaderboard' : 'Ready to set the schedule'}
+                    </h3>
                     <p className="text-sm text-muted-foreground mt-1">
                       {league.members.length < 2
-                        ? 'Your rules are set. Invite at least one opponent before Week 1 can be scheduled.'
-                        : `${league.members.length} players are in. Scheduling now locks the round-robin slate and sets Week 1 for the upcoming Sunday.`}
+                        ? `Your rules are set. Invite at least one ${isLeaderboard ? 'other player' : 'opponent'} before Week 1 can begin.`
+                        : isLeaderboard
+                          ? `${league.members.length} players are in. Starting now sets Week 1 for Sunday; everyone begins the weekly race at zero.`
+                          : `${league.members.length} players are in. Scheduling now locks the round-robin slate and sets Week 1 for the upcoming Sunday.`}
                     </p>
 
                     <div className="flex items-center gap-2 mt-4">
@@ -206,15 +223,17 @@ export default function League() {
                         </Button>
                       ) : isAdmin ? (
                         <Button
-                          onClick={() => startSeason.mutate(currentSeason.id)}
+                          onClick={() => startSeason.mutate({ seasonId: currentSeason.id, gameFormat: league.game_format })}
                           disabled={startSeason.isPending}
                           className="gap-2"
                         >
                           {startSeason.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                          {startSeason.isPending ? 'Scheduling...' : 'Schedule Season 1'}
+                          {startSeason.isPending
+                            ? 'Starting...'
+                            : isLeaderboard ? 'Start Leaderboard' : 'Schedule Season 1'}
                         </Button>
                       ) : (
-                        <p className="text-sm text-muted-foreground">Waiting for the commissioner to schedule the season.</p>
+                        <p className="text-sm text-muted-foreground">Waiting for the commissioner to start the season.</p>
                       )}
                     </div>
                   </div>
@@ -232,13 +251,63 @@ export default function League() {
               </div>
               <div>
                 <p className="font-semibold text-sm">Week {currentWeek.week_number} kicks off {formatWeekKickoff(currentWeek.start_date)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">The matchups are locked in. Scoring, power plays, and taunts open Sunday.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isLeaderboard
+                    ? 'The board opens Sunday. Everyone scores the same daily game and races for #1.'
+                    : 'The matchups are locked in. Scoring, power plays, and taunts open Sunday.'}
+                </p>
               </div>
             </div>
           </motion.section>
         )}
 
-        {isActive && currentWeek && weekMatchups.length > 0 && (
+        {isActive && isLeaderboard && currentWeek && (
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ListOrdered className="w-4 h-4 text-pending" />
+                <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                  Week {currentWeek.week_number} Leaderboard
+                </h2>
+              </div>
+              <span className={`text-[10px] uppercase tracking-wider font-bold ${isLiveWeek ? 'text-primary' : 'text-muted-foreground'}`}>
+                {isLiveWeek ? 'Live' : weekPhase === 'scheduled' ? 'Opens Sunday' : 'Final'}
+              </span>
+            </div>
+
+            <div className="card-elevated rounded-xl overflow-hidden divide-y divide-border">
+              {weeklySorted.map((member, index) => {
+                const rank = getWeeklyRank(member);
+                const gap = weeklyLeaderScore - member.weekly_points;
+                const isMe = member.user_id === user?.id;
+                return (
+                  <div key={member.id} className={`flex items-center gap-3 p-3 ${isMe ? 'bg-primary/10' : ''}`}>
+                    <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                      {rank === 1 ? <Crown className="w-5 h-5 text-pending" /> : <span className="font-bold text-muted-foreground">{rank}</span>}
+                    </div>
+                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                      {renderAvatar(member, index)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold truncate ${isMe ? 'text-primary' : ''}`}>
+                        {isMe ? 'You' : member.display_name || 'Player'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {rank === 1 ? 'Setting the pace' : `${gap.toLocaleString()} pts off the lead`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="score-text text-xl">{member.weekly_points.toLocaleString()}</p>
+                      <p className="text-[10px] text-muted-foreground">week pts</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {isActive && !isLeaderboard && currentWeek && weekMatchups.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Swords className="w-4 h-4 text-secondary" />
@@ -248,8 +317,8 @@ export default function League() {
             </div>
             <div className="card-elevated rounded-xl overflow-hidden divide-y divide-border">
               {weekMatchups.map((matchup, index) => {
-                const user1 = league.members.find(m => m.user_id === matchup.user1_id);
-                const user2 = league.members.find(m => m.user_id === matchup.user2_id);
+                const user1 = league.members.find((member) => member.user_id === matchup.user1_id);
+                const user2 = league.members.find((member) => member.user_id === matchup.user2_id);
                 const isMyGame = matchup.user1_id === user?.id || matchup.user2_id === user?.id;
                 const isFinal = matchup.status === 'completed';
                 const user1Won = isFinal && matchup.user1_score > matchup.user2_score;
@@ -319,6 +388,7 @@ export default function League() {
                   index={index}
                   isCurrentUser={member.user_id === user?.id}
                   isLowestScorer={!!lowestScorer && member.user_id === lowestScorer.user_id}
+                  competitionFormat={league.game_format}
                 />
               ))}
             </div>
@@ -332,12 +402,12 @@ export default function League() {
               <span className="text-xs text-muted-foreground">Week {currentWeek.week_number} of {currentSeason.weeks_count}</span>
             </div>
             <div className="flex gap-1">
-              {Array.from({ length: currentSeason.weeks_count }).map((_, i) => (
+              {Array.from({ length: currentSeason.weeks_count }).map((_, index) => (
                 <div
-                  key={i}
+                  key={index}
                   className={`flex-1 h-2 rounded-full ${
-                    i < currentWeek.week_number - 1 ? 'bg-primary' :
-                    i === currentWeek.week_number - 1 ? 'bg-primary/50 animate-pulse' : 'bg-muted'
+                    index < currentWeek.week_number - 1 ? 'bg-primary' :
+                    index === currentWeek.week_number - 1 ? 'bg-primary/50 animate-pulse' : 'bg-muted'
                   }`}
                 />
               ))}
