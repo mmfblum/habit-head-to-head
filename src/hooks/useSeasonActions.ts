@@ -8,9 +8,10 @@ export function useStartSeason() {
 
   return useMutation({
     mutationFn: async (seasonId: string) => {
-      const { error } = await (supabase as any).rpc('start_league_season', {
-        _season_id: seasonId,
-      });
+      const { error } = await supabase.rpc(
+        'start_league_season' as never,
+        { _season_id: seasonId } as never
+      );
 
       if (error) throw error;
       return { success: true };
