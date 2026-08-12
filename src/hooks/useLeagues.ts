@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getLocalISODate } from '@/lib/date';
 import { useAuth } from './useAuth';
-import type { Tables, TablesInsert } from '@/integrations/supabase/types';
+import type { Tables } from '@/integrations/supabase/types';
 
 export type League = Tables<'leagues'>;
 export type LeagueMember = Tables<'league_members'>;
@@ -39,7 +38,6 @@ export function useCreateLeague() {
     mutationFn: async ({ name, description }: { name: string; description?: string }) => {
       if (!user) throw new Error('Must be logged in');
 
-      // Create the league
       const { data: league, error: leagueError } = await supabase
         .from('leagues')
         .insert({ name, description, created_by: user.id })
@@ -48,7 +46,6 @@ export function useCreateLeague() {
 
       if (leagueError) throw leagueError;
 
-      // Add user as owner
       const { error: memberError } = await supabase
         .from('league_members')
         .insert({
@@ -62,7 +59,6 @@ export function useCreateLeague() {
       return league;
     },
     onSuccess: async () => {
-      // Invalidate both the exact key and base key to ensure LeagueGate updates
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
       await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
@@ -87,7 +83,6 @@ export function useCreateSeason() {
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + weeksCount * 7);
 
-      // Get the next season number
       const { data: existingSeasons } = await supabase
         .from('seasons')
         .select('season_number')
@@ -167,60 +162,18 @@ export function useJoinLeague() {
     mutationFn: async (inviteCode: string) => {
       if (!user) throw new Error('Must be logged in');
 
-      // Check if user is already in a league (single-league enforcement)
-      const { data: existingMembership } = await supabase
-        .from('league_members')
-        .select('id, leagues(name)')
-        .eq('user_id', user.id)
-        .single();
+      const { data, error } = await supabase.rpc(
+        'join_league_by_code' as never,
+        { _invite_code: inviteCode.trim() } as never
+      );
 
-      if (existingMembership) {
-        throw new Error('You are already in a league. Leave your current league first to join another.');
-      }
-
-      // Find league by invite code
-      const { data: leagues, error: findError } = await supabase
-        .from('leagues')
-        .select('*')
-        .eq('invite_code', inviteCode.toLowerCase().trim());
-
-      if (findError) throw findError;
-      if (!leagues || leagues.length === 0) throw new Error('Invalid invite code');
-
-      const league = leagues[0];
-
-      // Check member count
-      const { count } = await supabase
-        .from('league_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('league_id', league.id);
-
-      if (count && count >= league.max_members) {
-        throw new Error('This league is full');
-      }
-
-      // Join the league
-      const { error: joinError } = await supabase
-        .from('league_members')
-        .insert({
-          league_id: league.id,
-          user_id: user.id,
-          role: 'member',
-        });
-
-      if (joinError) {
-        // Handle unique constraint violation
-        if (joinError.code === '23505') {
-          throw new Error('You are already in a league');
-        }
-        throw joinError;
-      }
-
-      return league;
+      if (error) throw error;
+      return data as unknown as string;
     },
     onSuccess: async () => {
-      // Invalidate and refetch to ensure LeagueGate updates immediately
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+      await queryClient.invalidateQueries({ queryKey: ['league-details'] });
       await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
   });
