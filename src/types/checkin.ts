@@ -9,13 +9,11 @@ export type InputType = Enums<'input_type'>;
 export type ScoringType = Enums<'scoring_type'>;
 export type UnitType = Enums<'unit_type'>;
 
-// Extended task instance with template info for UI
 export interface TaskWithTemplate extends TaskInstance {
   template?: TaskTemplate;
   todayCheckin?: DailyCheckin;
 }
 
-// Check-in input values by type
 export interface CheckinValue {
   boolean_value?: boolean;
   numeric_value?: number;
@@ -24,7 +22,6 @@ export interface CheckinValue {
   metadata?: Record<string, unknown> | null;
 }
 
-// Icon mapping for task templates
 export const TASK_ICONS: Record<string, string> = {
   footprints: '👟',
   dumbbell: '💪',
@@ -39,4 +36,6 @@ export const TASK_ICONS: Record<string, string> = {
   activity: '📊',
   droplet: '💧',
   timer: '⏱️',
+  sparkles: '✨',
+  hash: '🔢',
 };
