@@ -24,6 +24,7 @@ export default function Tasks() {
   const seasonStatus = leagueDetails?.current_season?.status;
   const currentWeek = leagueDetails?.current_week;
   const weekPhase = getCompetitionWeekPhase(currentWeek?.start_date, currentWeek?.end_date);
+  const isLeaderboard = leagueDetails?.game_format === 'leaderboard';
   const isSeasonDraft = seasonStatus === 'draft';
   const isSeasonActive = seasonStatus === 'active';
   const isWeekLive = isSeasonActive && weekPhase === 'live';
@@ -141,9 +142,11 @@ export default function Tasks() {
               <Flag className="w-8 h-8 text-secondary" />
             </div>
             <p className="text-[10px] uppercase tracking-wider text-secondary font-bold">Preseason</p>
-            <h2 className="text-xl font-display font-bold mt-1 mb-2">Week 1 hasn’t been scheduled</h2>
+            <h2 className="text-xl font-display font-bold mt-1 mb-2">Week 1 hasn’t been started</h2>
             <p className="text-muted-foreground mb-6">
-              League rules are set before kickoff. Once the commissioner starts the season, the Sunday matchup schedule appears here.
+              {isLeaderboard
+                ? 'League rules are set before kickoff. Once the commissioner starts the season, the first weekly leaderboard opens on Sunday.'
+                : 'League rules are set before kickoff. Once the commissioner starts the season, the Sunday matchup schedule appears here.'}
             </p>
             <Button onClick={() => navigate('/league')}>Go to League</Button>
           </div>
@@ -152,14 +155,20 @@ export default function Tasks() {
             <div className="w-16 h-16 rounded-2xl bg-secondary/15 flex items-center justify-center mx-auto mb-4">
               <Flag className="w-8 h-8 text-secondary" />
             </div>
-            <p className="text-[10px] uppercase tracking-wider text-secondary font-bold">Matchup scheduled</p>
+            <p className="text-[10px] uppercase tracking-wider text-secondary font-bold">
+              {isLeaderboard ? 'Leaderboard scheduled' : 'Matchup scheduled'}
+            </p>
             <h2 className="text-xl font-display font-bold mt-1 mb-2">
               Check-ins unlock {formatWeekKickoff(currentWeek?.start_date)}
             </h2>
             <p className="text-muted-foreground mb-6">
-              Your opponent is set, but scoring stays locked until the Sunday-to-Saturday week begins.
+              {isLeaderboard
+                ? 'Everyone starts at zero when the Sunday-to-Saturday scoring week opens.'
+                : 'Your opponent is set, but scoring stays locked until the Sunday-to-Saturday week begins.'}
             </p>
-            <Button onClick={() => navigate('/matchup')}>View Matchup</Button>
+            <Button onClick={() => navigate(isLeaderboard ? '/league' : '/matchup')}>
+              {isLeaderboard ? 'View Leaderboard' : 'View Matchup'}
+            </Button>
           </div>
         ) : !currentSeasonId ? (
           <div className="text-center py-12">
