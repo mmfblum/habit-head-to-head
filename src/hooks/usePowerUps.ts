@@ -51,14 +51,12 @@ export function usePowerUps(weekId?: string) {
     queryFn: async (): Promise<PowerUp[]> => {
       if (!weekId || !user) return [];
 
-      // New activation columns are added by the Power Play migration. Cast the
-      // result until generated Supabase types are refreshed against that schema.
       const { data, error } = await supabase
         .from('powerups')
         .select('*')
         .eq('week_id', weekId)
         .eq('user_id', user.id)
-        .eq('is_used', false);
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
       return (data || []) as unknown as PowerUp[];
@@ -98,8 +96,9 @@ export function usePowerUps(weekId?: string) {
   });
 
   const powerups = query.data || [];
-  const availablePowerups = powerups.filter(powerup => !powerup.is_activated);
-  const armedPowerups = powerups.filter(powerup => powerup.is_activated);
+  const availablePowerups = powerups.filter(powerup => !powerup.is_used && !powerup.is_activated);
+  const armedPowerups = powerups.filter(powerup => !powerup.is_used && powerup.is_activated);
+  const usedPowerups = powerups.filter(powerup => powerup.is_used);
 
   const groupedPowerups = availablePowerups.reduce((acc, powerup) => {
     const type = powerup.powerup_type as PowerUpType;
@@ -114,9 +113,11 @@ export function usePowerUps(weekId?: string) {
     powerups,
     availablePowerups,
     armedPowerups,
+    usedPowerups,
     groupedPowerups,
     activatePowerUp,
     availableCount: availablePowerups.length,
     armedCount: armedPowerups.length,
+    usedCount: usedPowerups.length,
   };
 }
