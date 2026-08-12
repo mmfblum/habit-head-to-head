@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Clock, TrendingUp, TrendingDown, Minus, Shield, Swords } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 
@@ -102,6 +102,28 @@ export function MatchupScoreboard({
   const isTied = scoreDiff === 0;
   const isLive = status === 'in_progress';
   const isScheduled = status === 'scheduled';
+  const pointsToLead = Math.abs(scoreDiff) + 1;
+
+  const gameState = isScheduled
+    ? { label: 'Your opponent is set. First score lands Sunday.', tone: 'secondary' as const, icon: Swords }
+    : status === 'completed'
+      ? isWinning
+        ? { label: `Final: you won by ${scoreDiff.toLocaleString()}.`, tone: 'primary' as const, icon: TrendingUp }
+        : isTied
+          ? { label: 'Final: dead even.', tone: 'muted' as const, icon: Minus }
+          : { label: `Final: ${Math.abs(scoreDiff).toLocaleString()} points short.`, tone: 'loss' as const, icon: TrendingDown }
+      : isWinning
+        ? { label: `Protect the lead — you’re up ${scoreDiff.toLocaleString()}.`, tone: 'primary' as const, icon: Shield }
+        : isTied
+          ? { label: 'Next score takes the lead.', tone: 'pending' as const, icon: Swords }
+          : { label: `${pointsToLead.toLocaleString()} points to take the lead.`, tone: 'loss' as const, icon: TrendingUp };
+
+  const GameStateIcon = gameState.icon;
+  const gameStateClass = gameState.tone === 'primary' ? 'border-primary/30 bg-primary/10 text-primary' :
+    gameState.tone === 'loss' ? 'border-loss/30 bg-loss/10 text-loss' :
+    gameState.tone === 'pending' ? 'border-pending/30 bg-pending/10 text-pending' :
+    gameState.tone === 'secondary' ? 'border-secondary/30 bg-secondary/10 text-secondary' :
+    'border-border bg-muted/50 text-muted-foreground';
 
   return (
     <header className="relative overflow-hidden safe-top">
@@ -179,8 +201,18 @@ export function MatchupScoreboard({
           </div>
         </div>
 
+        <motion.div
+          key={gameState.label}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`mt-5 mx-auto max-w-sm rounded-xl border px-3 py-2 flex items-center justify-center gap-2 text-xs font-semibold ${gameStateClass}`}
+        >
+          <GameStateIcon className="w-4 h-4" />
+          <span>{gameState.label}</span>
+        </motion.div>
+
         {(weekStartDate || weekEndDate) && (
-          <div className="mt-4">
+          <div className="mt-3">
             <MatchupClock status={status} startDate={weekStartDate} endDate={weekEndDate} />
           </div>
         )}
