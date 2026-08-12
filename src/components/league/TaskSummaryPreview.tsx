@@ -1,4 +1,4 @@
-import { Check, Clock, Target, Zap } from 'lucide-react';
+import { Check, Target } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TaskTemplate } from '@/hooks/useTaskTemplates';
@@ -8,21 +8,12 @@ import { getConfiguredTaskName } from '@/lib/taskNaming';
 interface TaskSummaryPreviewProps {
   templates: TaskTemplate[];
   configs: Map<string, TaskConfigOverrides>;
-  totalPoints: number;
 }
 
-function formatTime(time: string): string {
-  const [hours, minutes] = time.split(':').map(Number);
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const displayHours = hours % 12 || 12;
-  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-}
-
-export function TaskSummaryPreview({ templates, configs, totalPoints }: TaskSummaryPreviewProps) {
+export function TaskSummaryPreview({ templates, configs }: TaskSummaryPreviewProps) {
   if (configs.size === 0) return null;
 
   const selectedTemplates = templates.filter(t => configs.has(t.id));
-  const pointsPerTask = Math.floor(totalPoints / configs.size);
 
   return (
     <Card className="border-primary/20 bg-primary/5">
@@ -41,7 +32,7 @@ export function TaskSummaryPreview({ templates, configs, totalPoints }: TaskSumm
           const isBinary = config.scoring_mode === 'binary';
 
           return (
-            <div 
+            <div
               key={template.id}
               className="flex items-center justify-between py-2 px-3 rounded-lg bg-background/50 border border-border/50"
             >
@@ -49,28 +40,21 @@ export function TaskSummaryPreview({ templates, configs, totalPoints }: TaskSumm
                 <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
                 <span className="text-sm font-medium truncate">{displayName}</span>
               </div>
-              
-              <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="outline" className="text-xs">
-                  {isBinary ? (
-                    <><Check className="w-3 h-3 mr-1" />Yes/No</>
-                  ) : (
-                    <><Target className="w-3 h-3 mr-1" />Detailed</>
-                  )}
-                </Badge>
-                <Badge className="text-xs bg-primary/20 text-primary hover:bg-primary/20">
-                  <Zap className="w-3 h-3 mr-1" />
-                  10 pts
-                </Badge>
-              </div>
+
+              <Badge variant="outline" className="text-xs shrink-0">
+                {isBinary ? (
+                  <><Check className="w-3 h-3 mr-1" />Yes/No</>
+                ) : (
+                  <><Target className="w-3 h-3 mr-1" />Detailed</>
+                )}
+              </Badge>
             </div>
           );
         })}
 
-        <div className="pt-2 mt-2 border-t border-border/50 flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Total daily points possible:</span>
-          <span className="font-bold text-primary">{totalPoints} pts</span>
-        </div>
+        <p className="pt-2 mt-2 border-t border-border/50 text-xs text-muted-foreground">
+          Points are calculated from each task’s configured scoring rule, not a flat per-task value.
+        </p>
       </CardContent>
     </Card>
   );
