@@ -8,28 +8,27 @@ export function useStartSeason() {
 
   return useMutation({
     mutationFn: async (seasonId: string) => {
-      const { data, error } = await supabase
-        .from('seasons')
-        .update({ status: 'active' })
-        .eq('id', seasonId)
-        .select()
-        .single();
+      const { error } = await (supabase as any).rpc('start_league_season', {
+        _season_id: seasonId,
+      });
 
       if (error) throw error;
-      return data;
+      return { success: true };
     },
     onSuccess: () => {
       toast({
         title: 'Season Started!',
-        description: 'Your season is now active. Start tracking your daily tasks!',
+        description: 'Week 1 is live. The head-to-head schedule is set.',
       });
       queryClient.invalidateQueries({ queryKey: ['league-details'] });
       queryClient.invalidateQueries({ queryKey: ['tasks-with-checkins'] });
       queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+      queryClient.invalidateQueries({ queryKey: ['current-matchup'] });
+      queryClient.invalidateQueries({ queryKey: ['week-matchups'] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
-        title: 'Error',
+        title: 'Could not start season',
         description: error.message,
         variant: 'destructive',
       });
