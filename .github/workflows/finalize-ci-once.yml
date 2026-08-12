@@ -1,0 +1,101 @@
+name: One-shot final Zrizin validation
+
+on:
+  push:
+    branches:
+      - 'agent/competitive-loop-foundation'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Normalize final legacy demo cast
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/pages/CheckinDemo.tsx')
+          text = path.read_text()
+          text = text.replace("config: timerConfig as any", "config: timerConfig as TaskWithTemplate['config']")
+          path.write_text(text)
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Lint repository
+        run: npm run lint
+
+      - name: Install strict permanent CI and remove one-shot workflows
+        run: |
+          cat > .github/workflows/ci.yml <<'YAML'
+          name: Zrizin CI
+
+          on:
+            pull_request:
+              branches: [main]
+            push:
+              branches:
+                - main
+                - 'agent/**'
+
+          jobs:
+            validate:
+              runs-on: ubuntu-latest
+              timeout-minutes: 10
+
+              steps:
+                - name: Checkout
+                  uses: actions/checkout@v4
+
+                - name: Use Node.js
+                  uses: actions/setup-node@v4
+                  with:
+                    node-version: 20
+                    cache: npm
+
+                - name: Install dependencies
+                  run: npm ci
+
+                - name: Run tests
+                  run: npm test
+
+                - name: Build
+                  run: npm run build
+
+                - name: Lint
+                  run: npm run lint
+          YAML
+
+          rm -f .github/workflows/normalize-demo-once.yml
+          rm -f .github/workflows/finalize-ci-once.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/CheckinDemo.tsx .github/workflows/ci.yml .github/workflows/normalize-demo-once.yml .github/workflows/finalize-ci-once.yml || true
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Finalize strict Zrizin CI"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
