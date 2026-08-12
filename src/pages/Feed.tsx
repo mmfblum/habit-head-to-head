@@ -16,6 +16,34 @@ interface FeedEntry {
   points?: number;
 }
 
+type LeagueEventRow = {
+  id: string;
+  event_type: string;
+  title: string;
+  body: string | null;
+  created_at: string;
+  profiles?: {
+    avatar_url?: string | null;
+  } | null;
+};
+
+type ScoringFeedRow = {
+  id: string;
+  points_awarded: number;
+  created_at: string;
+  profiles?: {
+    display_name?: string | null;
+    avatar_url?: string | null;
+  } | null;
+  task_instances?: {
+    league_task_configs?: {
+      task_templates?: {
+        name?: string | null;
+      } | null;
+    } | null;
+  } | null;
+};
+
 export default function Feed() {
   const queryClient = useQueryClient();
   const { data: league } = useUserPrimaryLeague();
@@ -75,7 +103,10 @@ export default function Feed() {
       if (eventsResult.error) throw eventsResult.error;
       if (scoresResult.error) throw scoresResult.error;
 
-      const leagueEntries: FeedEntry[] = (eventsResult.data || []).map((event: any) => ({
+      const leagueRows = (eventsResult.data || []) as unknown as LeagueEventRow[];
+      const scoreRows = (scoresResult.data || []) as unknown as ScoringFeedRow[];
+
+      const leagueEntries: FeedEntry[] = leagueRows.map((event) => ({
         id: `event-${event.id}`,
         kind: event.event_type === 'taunt' ? 'taunt' : 'league',
         title: event.title,
@@ -84,7 +115,7 @@ export default function Feed() {
         avatar_url: event.profiles?.avatar_url || null,
       }));
 
-      const scoringEntries: FeedEntry[] = (scoresResult.data || []).map((event: any) => {
+      const scoringEntries: FeedEntry[] = scoreRows.map((event) => {
         const profile = event.profiles;
         const template = event.task_instances?.league_task_configs?.task_templates;
         return {
