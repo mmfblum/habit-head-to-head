@@ -9,6 +9,7 @@ import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
 import { useCurrentMatchup } from '@/hooks/useCurrentMatchup';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/hooks/useAuth';
+import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';
 import { TASK_ICONS } from '@/types/checkin';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { User, Matchup, Task } from '@/lib/mockData';
@@ -53,10 +54,12 @@ export default function Dashboard() {
   const { data: notifications = [] } = useNotifications();
 
   const currentWeek = leagueDetails?.current_week;
+  const weekPhase = getCompetitionWeekPhase(currentWeek?.start_date, currentWeek?.end_date);
   const { data: scheduledMatchup, isLoading: matchupLoading } = useCurrentMatchup(currentWeek?.id);
 
   const hasActiveSeason = leagueDetails?.current_season?.status === 'active';
-  const seasonId = hasActiveSeason ? leagueDetails?.current_season?.id : undefined;
+  const isLiveWeek = hasActiveSeason && weekPhase === 'live';
+  const seasonId = isLiveWeek ? leagueDetails?.current_season?.id : undefined;
   const { data: realTasks = [], isLoading: tasksLoading } = useTasksWithCheckins(seasonId, new Date());
   const unreadCount = notifications.filter(notification => !notification.read_at).length;
 
@@ -168,16 +171,18 @@ export default function Dashboard() {
     weeksCount: leagueDetails.current_season?.weeks_count ?? 1,
   };
 
+  const headerEyebrow = !leagueDetails.current_season
+    ? 'League setup'
+    : hasActiveSeason && weekPhase === 'scheduled' && currentWeek
+      ? `Week ${currentWeek.week_number} starts ${formatWeekKickoff(currentWeek.start_date)} • Season ${leagueDetails.current_season.season_number}`
+      : `Week ${currentWeek?.week_number ?? 1} • Season ${leagueDetails.current_season.season_number}`;
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border safe-top">
         <div className="flex items-center justify-between px-4 py-3">
           <div>
-            <p className="text-xs text-muted-foreground">
-              {leagueDetails.current_season
-                ? `Week ${currentWeek?.week_number ?? 1} • Season ${leagueDetails.current_season.season_number}`
-                : 'League setup'}
-            </p>
+            <p className="text-xs text-muted-foreground">{headerEyebrow}</p>
             <h1 className="font-display font-bold text-lg">{leagueDetails.name}</h1>
           </div>
           <div className="flex items-center gap-2">
@@ -210,6 +215,7 @@ export default function Dashboard() {
             <MatchupCard
               matchup={displayMatchup}
               compact
+              weekStartDate={currentWeek?.start_date}
               weekEndDate={currentWeek?.end_date}
               onClick={() => navigate('/matchup')}
             />
@@ -224,9 +230,7 @@ export default function Dashboard() {
                   <UserPlus className="w-5 h-5 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-semibold text-sm">
-                    {totalMembers > 1 ? 'Bye Week' : 'Invite Opponents'}
-                  </p>
+                  <p className="font-semibold text-sm">{totalMembers > 1 ? 'Bye Week' : 'Invite Opponents'}</p>
                   <p className="text-xs text-muted-foreground">
                     {totalMembers > 1
                       ? 'No head-to-head matchup is scheduled for you this week.'
@@ -244,30 +248,22 @@ export default function Dashboard() {
           )}
         </section>
 
-        {hasActiveSeason && transformedTasks.length > 0 && (
+        {isLiveWeek && transformedTasks.length > 0 && (
           <motion.button
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             whileTap={{ scale: 0.99 }}
             onClick={() => navigate('/tasks')}
             className={`w-full p-4 rounded-xl border text-left flex items-center gap-3 ${
-              nextTask
-                ? 'bg-secondary/10 border-secondary/25'
-                : 'bg-primary/10 border-primary/25'
+              nextTask ? 'bg-secondary/10 border-secondary/25' : 'bg-primary/10 border-primary/25'
             }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              nextTask ? 'bg-secondary/20' : 'bg-primary/20'
-            }`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${nextTask ? 'bg-secondary/20' : 'bg-primary/20'}`}>
               {nextTask ? <Zap className="w-5 h-5 text-secondary" /> : <CheckCircle2 className="w-5 h-5 text-primary" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                {nextTask ? 'Make a move' : 'Perfect day'}
-              </p>
-              <p className="font-semibold text-sm truncate">
-                {nextTask ? `Finish ${nextTask.name}` : 'Every task is complete'}
-              </p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{nextTask ? 'Make a move' : 'Perfect day'}</p>
+              <p className="font-semibold text-sm truncate">{nextTask ? `Finish ${nextTask.name}` : 'Every task is complete'}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {nextTask
                   ? `${nextTask.currentValue.toLocaleString()} of ${nextTask.target.toLocaleString()} ${nextTask.unit}`
@@ -279,15 +275,10 @@ export default function Dashboard() {
         )}
 
         <section>
-          <div
-            className="flex items-center justify-between mb-3 cursor-pointer"
-            onClick={() => navigate('/tasks')}
-          >
+          <div className="flex items-center justify-between mb-3 cursor-pointer" onClick={() => navigate('/tasks')}>
             <div className="flex items-center gap-2">
-              <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-                Today's Tasks
-              </h2>
-              {hasActiveSeason && (
+              <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">Today's Tasks</h2>
+              {isLiveWeek && (
                 <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold">
                   {completedCount}/{transformedTasks.length}
                 </span>
@@ -296,7 +287,7 @@ export default function Dashboard() {
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
 
-          {tasksLoading ? (
+          {tasksLoading && isLiveWeek ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
             </div>
@@ -305,17 +296,16 @@ export default function Dashboard() {
               {todayTasks.map(task => <TaskCard key={task.id} task={task} />)}
             </div>
           ) : (
-            <button
-              onClick={() => navigate('/tasks')}
-              className="w-full p-5 rounded-xl bg-muted/40 text-left"
-            >
+            <button onClick={() => navigate('/tasks')} className="w-full p-5 rounded-xl bg-muted/40 text-left">
               <p className="font-semibold text-sm">
-                {hasActiveSeason ? 'No tasks configured' : 'Season not active yet'}
+                {hasActiveSeason && weekPhase === 'scheduled'
+                  ? `Check-ins unlock ${formatWeekKickoff(currentWeek?.start_date)}`
+                  : isLiveWeek ? 'No tasks configured' : 'Season not active yet'}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {hasActiveSeason
-                  ? 'Open Tasks to review your league setup.'
-                  : 'Finish league setup to begin earning points.'}
+                {hasActiveSeason && weekPhase === 'scheduled'
+                  ? 'Your matchup is set. Week 1 begins on Sunday.'
+                  : isLiveWeek ? 'Open Tasks to review your league setup.' : 'Finish league setup to begin earning points.'}
               </p>
             </button>
           )}
@@ -333,17 +323,13 @@ export default function Dashboard() {
 
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-              Season Snapshot
-            </h2>
-            <button onClick={() => navigate('/league')} className="text-xs text-primary font-medium">
-              Standings
-            </button>
+            <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">Season Snapshot</h2>
+            <button onClick={() => navigate('/league')} className="text-xs text-primary font-medium">Standings</button>
           </div>
           <QuickStats {...statsProps} />
         </section>
 
-        {displayMatchup && scheduledMatchup?.status !== 'completed' && currentWeek && (
+        {displayMatchup && scheduledMatchup?.status === 'in_progress' && currentWeek && (
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
