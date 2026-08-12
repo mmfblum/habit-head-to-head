@@ -17,6 +17,7 @@ import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 import CheckinDemo from "./pages/CheckinDemo";
 import { useUserLeagues } from "./hooks/useLeagues";
+import { useUserPrimaryLeague } from "./hooks/useLeagueDetails";
 
 const queryClient = new QueryClient();
 
@@ -63,11 +64,28 @@ function LeagueGate({ children }: { children: React.ReactNode }) {
     );
   }
   
-  // If user has no leagues, show onboarding
   if (!leagues || leagues.length === 0) {
     return <Onboarding />;
   }
   
+  return <>{children}</>;
+}
+
+function HeadToHeadOnly({ children }: { children: React.ReactNode }) {
+  const { data: league, isLoading } = useUserPrimaryLeague();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (league?.game_format === 'leaderboard') {
+    return <Navigate to="/league" replace />;
+  }
+
   return <>{children}</>;
 }
 
@@ -113,7 +131,9 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <LeagueGate>
-                <Matchup />
+                <HeadToHeadOnly>
+                  <Matchup />
+                </HeadToHeadOnly>
               </LeagueGate>
             </ProtectedRoute>
           }
