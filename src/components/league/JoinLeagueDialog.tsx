@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import {
@@ -17,12 +17,17 @@ import { toast } from 'sonner';
 interface JoinLeagueDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialCode?: string;
 }
 
-export function JoinLeagueDialog({ open, onOpenChange }: JoinLeagueDialogProps) {
-  const [inviteCode, setInviteCode] = useState('');
+export function JoinLeagueDialog({ open, onOpenChange, initialCode = '' }: JoinLeagueDialogProps) {
+  const [inviteCode, setInviteCode] = useState(initialCode.toUpperCase());
   const joinLeague = useJoinLeague();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (open && initialCode) setInviteCode(initialCode.toUpperCase());
+  }, [open, initialCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +41,7 @@ export function JoinLeagueDialog({ open, onOpenChange }: JoinLeagueDialogProps) 
       const league = await joinLeague.mutateAsync(inviteCode);
       toast.success(`Joined ${league.name}!`);
       onOpenChange(false);
-      navigate('/league');
+      navigate('/league', { replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to join league');
     }
@@ -49,9 +54,11 @@ export function JoinLeagueDialog({ open, onOpenChange }: JoinLeagueDialogProps) 
           <div className="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center mx-auto mb-2">
             <Users className="w-6 h-6 text-secondary" />
           </div>
-          <DialogTitle className="text-center font-display">Join a League</DialogTitle>
+          <DialogTitle className="text-center font-display">
+            {initialCode ? 'You’ve Been Invited' : 'Join a League'}
+          </DialogTitle>
           <DialogDescription className="text-center">
-            Enter the invite code shared by your league admin
+            {initialCode ? 'Confirm the invitation and jump straight into the league.' : 'Enter the invite code shared by your league admin'}
           </DialogDescription>
         </DialogHeader>
 
@@ -65,15 +72,12 @@ export function JoinLeagueDialog({ open, onOpenChange }: JoinLeagueDialogProps) 
               onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
               className="text-center text-lg tracking-widest uppercase"
               maxLength={12}
+              readOnly={!!initialCode}
             />
           </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={joinLeague.isPending || !inviteCode.trim()}
-          >
-            {joinLeague.isPending ? 'Joining...' : 'Join League'}
+          <Button type="submit" className="w-full" disabled={joinLeague.isPending || !inviteCode.trim()}>
+            {joinLeague.isPending ? 'Joining...' : initialCode ? 'Join This League' : 'Join League'}
           </Button>
         </form>
       </DialogContent>
