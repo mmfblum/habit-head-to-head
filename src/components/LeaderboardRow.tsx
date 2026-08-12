@@ -20,6 +20,7 @@ interface LeaderboardRowProps {
   index: number;
   isCurrentUser?: boolean;
   isLowestScorer?: boolean;
+  competitionFormat?: 'head_to_head' | 'leaderboard';
 }
 
 function Avatar({ value, alt }: { value: string; alt: string }) {
@@ -29,14 +30,20 @@ function Avatar({ value, alt }: { value: string; alt: string }) {
   return <span>{value}</span>;
 }
 
-export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestScorer = false }: LeaderboardRowProps) {
+export function LeaderboardRow({
+  user,
+  index,
+  isCurrentUser = false,
+  isLowestScorer = false,
+  competitionFormat = 'head_to_head',
+}: LeaderboardRowProps) {
   const getRankDisplay = () => {
     if (user.rank === 1) return <Crown className="w-5 h-5 text-pending" />;
     return <span className="font-bold text-muted-foreground">{user.rank}</span>;
   };
 
   const getStreakIndicator = () => {
-    if (user.streak <= 0 || !user.streakType) return null;
+    if (competitionFormat === 'leaderboard' || user.streak <= 0 || !user.streakType) return null;
 
     if (user.streakType === 'W') {
       return (
@@ -81,7 +88,7 @@ export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestSco
         }`}>
           <Avatar value={user.avatar} alt={user.username} />
         </div>
-        {isLowestScorer && (
+        {isLowestScorer && competitionFormat === 'head_to_head' && (
           <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-loss rounded-full flex items-center justify-center">
             <Skull className="w-3 h-3 text-loss-foreground" />
           </div>
@@ -96,14 +103,16 @@ export function LeaderboardRow({ user, index, isCurrentUser = false, isLowestSco
           {getStreakIndicator()}
         </div>
         <p className="text-xs text-muted-foreground">
-          {record} {user.ties > 0 ? 'W-L-T' : 'W-L'}
+          {competitionFormat === 'leaderboard'
+            ? `${user.weeklyScore.toLocaleString()} pts this week`
+            : `${record} ${user.ties > 0 ? 'W-L-T' : 'W-L'}`}
         </p>
       </div>
 
       <div className="text-right">
         <p className="score-text text-lg">{user.seasonScore.toLocaleString()}</p>
         <p className="text-xs text-muted-foreground">
-          {user.weeklyScore.toLocaleString()} this week
+          {competitionFormat === 'leaderboard' ? 'season pts' : `${user.weeklyScore.toLocaleString()} this week`}
         </p>
       </div>
     </motion.div>
