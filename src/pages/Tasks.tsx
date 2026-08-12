@@ -28,6 +28,7 @@ export default function Tasks() {
   const isSeasonDraft = seasonStatus === 'draft';
   const isSeasonActive = seasonStatus === 'active';
   const isWeekLive = isSeasonActive && weekPhase === 'live';
+  const isPreseason = isWeekLive && currentWeek?.week_number === 0;
   const activeSeasonId = isWeekLive ? currentSeasonId : undefined;
 
   const { data: tasks = [], isLoading: tasksLoading } = useTasksWithCheckins(activeSeasonId, selectedDate);
@@ -72,7 +73,13 @@ export default function Tasks() {
                 <Button variant="ghost" className="gap-2" disabled={!isWeekLive}>
                   <Calendar className="w-4 h-4" />
                   <span className="font-display font-bold">
-                    {isWeekLive ? (isToday ? 'Today’s Scoring' : format(selectedDate, 'EEE, MMM d')) : 'Tasks'}
+                    {isWeekLive
+                      ? isPreseason
+                        ? 'Preseason Practice'
+                        : isToday
+                          ? 'Today’s Scoring'
+                          : format(selectedDate, 'EEE, MMM d')
+                      : 'Tasks'}
                   </span>
                 </Button>
               </PopoverTrigger>
@@ -95,7 +102,9 @@ export default function Tasks() {
           {isWeekLive && (
             <div className="bg-card rounded-xl p-3 border border-border/60">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">Daily Scorecard</span>
+                <span className="text-sm text-muted-foreground">
+                  {isPreseason ? 'Practice Scorecard' : 'Daily Scorecard'}
+                </span>
                 <span className="text-sm font-semibold">{completedCount}/{tasks.length} goals hit</span>
               </div>
               <Progress value={progress} className="h-2" />
@@ -114,6 +123,23 @@ export default function Tasks() {
       </header>
 
       <main className="px-4 py-4">
+        {isPreseason && (
+          <div className="mb-4 rounded-xl border border-secondary/25 bg-secondary/10 p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-secondary/20 flex items-center justify-center shrink-0">
+                <Flag className="w-4 h-4 text-secondary" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-secondary font-bold">Preseason</p>
+                <p className="font-semibold text-sm mt-0.5">Practice scoring is live</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Try every task now. Practice points reset when Week 1 starts Sunday and do not count toward standings, records, streaks, or Power Plays.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isWeekLive && (
           <>
             <div className="flex gap-2 mb-4 overflow-x-auto pb-2 -mx-4 px-4">
@@ -145,8 +171,8 @@ export default function Tasks() {
             <h2 className="text-xl font-display font-bold mt-1 mb-2">Week 1 hasn’t been started</h2>
             <p className="text-muted-foreground mb-6">
               {isLeaderboard
-                ? 'League rules are set before kickoff. Once the commissioner starts the season, the first weekly leaderboard opens on Sunday.'
-                : 'League rules are set before kickoff. Once the commissioner starts the season, the Sunday matchup schedule appears here.'}
+                ? 'League rules are set before kickoff. Once the commissioner starts the season, preseason practice opens immediately and the first official leaderboard starts Sunday.'
+                : 'League rules are set before kickoff. Once the commissioner starts the season, preseason practice opens immediately and the first official matchup starts Sunday.'}
             </p>
             <Button onClick={() => navigate('/league')}>Go to League</Button>
           </div>
