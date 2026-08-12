@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -14,8 +15,11 @@ export interface UserNotification {
 
 export function useNotifications() {
   const { user } = useAuth();
-  return useQuery({
-    queryKey: ['notifications', user?.id],
+  const queryClient = useQueryClient();
+  const queryKey = ['notifications', user?.id];
+
+  const query = useQuery({
+    queryKey,
     enabled: !!user?.id,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -28,6 +32,30 @@ export function useNotifications() {
       return (data ?? []) as UserNotification[];
     },
   });
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => queryClient.invalidateQueries({ queryKey })
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
+
+  return query;
 }
 
 export function useMarkNotificationRead() {
@@ -46,8 +74,6 @@ export function useMarkNotificationRead() {
   });
 }
 
-// Minimal daily generator: creates start/end notifications once per day.
-// This is intentionally lightweight; can be replaced with a server-side cron later.
 export function useDailyMatchupNotifications(args: {
   leagueId?: string;
   opponentName?: string | null;
@@ -76,7 +102,6 @@ export function useDailyMatchupNotifications(args: {
       body,
       notify_date: today,
     });
-    // ignore unique-constraint duplicate errors
     if (error && !(error as any).code?.toString().includes('23505')) throw error;
   };
 
@@ -86,7 +111,7 @@ export function useDailyMatchupNotifications(args: {
     queryFn: async () => {
       const opp = args.opponentName ?? 'your opponent';
       const score = args.scoreLine ?? 'Check the matchup tab for the latest score.';
-      const swing = (args.swingTasks ?? []).slice(0,2);
+      const swing = (args.swingTasks ?? []).slice(0, 2);
       const swingText = swing.length ? `Key swing tasks: ${swing.join(', ')}.` : '';
 
       if (shouldStart) {
