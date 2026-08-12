@@ -10,6 +10,7 @@ import { useCurrentMatchup } from '@/hooks/useCurrentMatchup';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';
+import { isTaskGoalMet } from '@/lib/taskProgress';
 import { TASK_ICONS } from '@/types/checkin';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { User, Matchup, Task } from '@/lib/mockData';
@@ -33,7 +34,7 @@ function DashboardSkeleton() {
         <Skeleton className="h-56 w-full rounded-2xl" />
         <Skeleton className="h-20 w-full rounded-xl" />
         <div className="space-y-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          {[1, 2, 3].map((item) => <Skeleton key={item} className="h-24 rounded-xl" />)}
         </div>
       </main>
     </div>
@@ -61,18 +62,18 @@ export default function Dashboard() {
   const isLiveWeek = hasActiveSeason && weekPhase === 'live';
   const seasonId = isLiveWeek ? leagueDetails?.current_season?.id : undefined;
   const { data: realTasks = [], isLoading: tasksLoading } = useTasksWithCheckins(seasonId, new Date());
-  const unreadCount = notifications.filter(notification => !notification.read_at).length;
+  const unreadCount = notifications.filter((notification) => !notification.read_at).length;
 
   if (leagueLoading || matchupLoading) return <DashboardSkeleton />;
   if (!leagueDetails) return <DashboardSkeleton />;
 
-  const currentMember = leagueDetails.members.find(m => m.user_id === user?.id);
+  const currentMember = leagueDetails.members.find((member) => member.user_id === user?.id);
   const opponentId = scheduledMatchup
     ? scheduledMatchup.user1_id === user?.id
       ? scheduledMatchup.user2_id
       : scheduledMatchup.user1_id
     : undefined;
-  const opponentMember = leagueDetails.members.find(m => m.user_id === opponentId);
+  const opponentMember = leagueDetails.members.find((member) => member.user_id === opponentId);
   const totalMembers = leagueDetails.members.length;
 
   const displayUser: User = {
@@ -124,15 +125,17 @@ export default function Dashboard() {
         : 'in_progress',
   } : null;
 
-  const transformedTasks: Task[] = realTasks.map(task => {
+  const transformedTasks: Task[] = realTasks.map((task) => {
     const config = task.config as {
       target?: number;
       threshold?: number;
+      daily_limit_minutes?: number;
       max_points?: number;
       daily_cap?: number;
       points_per_unit?: number;
+      custom_description?: string;
     } | null;
-    const target = config?.target ?? config?.threshold ?? 1;
+    const target = config?.daily_limit_minutes ?? config?.target ?? config?.threshold ?? 1;
     const numericValue = task.todayCheckin?.numeric_value;
     const durationValue = task.todayCheckin?.duration_minutes;
     const booleanValue = task.todayCheckin?.boolean_value;
@@ -142,21 +145,21 @@ export default function Dashboard() {
       id: task.id,
       name: task.task_name,
       icon: TASK_ICONS[task.template?.icon ?? 'activity'] ?? '📊',
-      description: task.template?.description ?? '',
+      description: config?.custom_description ?? task.template?.description ?? '',
       type: 'custom' as const,
       target,
       unit: task.template?.unit ?? 'count',
       pointsPerUnit: config?.points_per_unit ?? 1,
       maxPoints: config?.max_points ?? config?.daily_cap ?? 100,
       currentValue,
-      completed: !!task.todayCheckin?.boolean_value || currentValue >= target,
+      completed: isTaskGoalMet(task),
       streakDays: 0,
     };
   });
 
   const todayTasks = transformedTasks.slice(0, 3);
-  const completedCount = transformedTasks.filter(t => t.completed).length;
-  const nextTask = transformedTasks.find(t => !t.completed);
+  const completedCount = transformedTasks.filter((task) => task.completed).length;
+  const nextTask = transformedTasks.find((task) => !task.completed);
 
   const statsProps = {
     rank: currentMember?.current_rank ?? 1,
@@ -263,11 +266,11 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{nextTask ? 'Make a move' : 'Perfect day'}</p>
-              <p className="font-semibold text-sm truncate">{nextTask ? `Finish ${nextTask.name}` : 'Every task is complete'}</p>
+              <p className="font-semibold text-sm truncate">{nextTask ? `Score ${nextTask.name}` : 'Every goal is scored'}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {nextTask
-                  ? `${nextTask.currentValue.toLocaleString()} of ${nextTask.target.toLocaleString()} ${nextTask.unit}`
-                  : `${completedCount}/${transformedTasks.length} tasks completed today`}
+                  ? `${transformedTasks.length - completedCount} scoring chance${transformedTasks.length - completedCount === 1 ? '' : 's'} left today`
+                  : `${completedCount}/${transformedTasks.length} goals hit today`}
               </p>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -277,7 +280,7 @@ export default function Dashboard() {
         <section>
           <div className="flex items-center justify-between mb-3 cursor-pointer" onClick={() => navigate('/tasks')}>
             <div className="flex items-center gap-2">
-              <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">Today's Tasks</h2>
+              <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">Today's Scorecard</h2>
               {isLiveWeek && (
                 <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold">
                   {completedCount}/{transformedTasks.length}
@@ -289,11 +292,11 @@ export default function Dashboard() {
 
           {tasksLoading && isLiveWeek ? (
             <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
+              {[1, 2, 3].map((item) => <Skeleton key={item} className="h-16 rounded-xl" />)}
             </div>
           ) : todayTasks.length > 0 ? (
             <div className="space-y-3">
-              {todayTasks.map(task => <TaskCard key={task.id} task={task} />)}
+              {todayTasks.map((task) => <TaskCard key={task.id} task={task} />)}
             </div>
           ) : (
             <button onClick={() => navigate('/tasks')} className="w-full p-5 rounded-xl bg-muted/40 text-left">
@@ -316,7 +319,7 @@ export default function Dashboard() {
               onClick={() => navigate('/tasks')}
               className="w-full mt-3 py-3 rounded-xl bg-muted/50 text-sm text-muted-foreground hover:bg-muted transition-colors"
             >
-              View all {transformedTasks.length} tasks
+              View all {transformedTasks.length} scoring tasks
             </motion.button>
           )}
         </section>
