@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Copy, Gamepad2, Share2, Trophy, Users, Zap } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Gamepad2, ListOrdered, Share2, Swords, Trophy, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateLeague, useCreateSeason, useConfigureSeasonTasks } from '@/hooks/useLeagues';
+import type { LeagueGameFormat } from '@/hooks/useLeagues';
 import { useTaskTemplatesByCategory, type TaskTemplate } from '@/hooks/useTaskTemplates';
 import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
@@ -24,6 +25,7 @@ interface LeagueFormData {
   name: string;
   description: string;
   weeksCount: number;
+  gameFormat: LeagueGameFormat;
 }
 
 function serializeConfig(config: TaskConfigOverrides) {
@@ -48,6 +50,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     name: '',
     description: '',
     weeksCount: 4,
+    gameFormat: 'head_to_head',
   });
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
   const [createdLeague, setCreatedLeague] = useState<{ id: string; invite_code: string | null } | null>(null);
@@ -97,6 +100,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       const league = await createLeague.mutateAsync({
         name: formData.name,
         description: formData.description,
+        gameFormat: formData.gameFormat,
       });
 
       const season = await createSeason.mutateAsync({
@@ -232,6 +236,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     { id: 'invite', label: 'Friends', icon: Users },
   ];
   const currentStepIndex = steps.findIndex((item) => item.id === step);
+  const isLeaderboard = formData.gameFormat === 'leaderboard';
 
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-auto">
@@ -275,7 +280,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 <div className="text-center mb-8">
                   <Trophy className="w-12 h-12 text-primary mx-auto mb-3" />
                   <h3 className="text-xl font-display font-bold">Build Your League</h3>
-                  <p className="text-muted-foreground">You’ll compete head-to-head every week. First, give the league an identity.</p>
+                  <p className="text-muted-foreground">Choose how your group competes, then build the daily scorecard.</p>
                 </div>
 
                 <div className="space-y-4">
@@ -287,6 +292,50 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     <Label htmlFor="description">League motto (optional)</Label>
                     <Textarea id="description" placeholder="No excuses. Win the week." value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows={3} />
                   </div>
+
+                  <div className="space-y-2">
+                    <Label>How should your league compete?</Label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, gameFormat: 'head_to_head' })}
+                        className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                          formData.gameFormat === 'head_to_head'
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border bg-card hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-secondary/15 flex items-center justify-center">
+                            <Swords className="w-5 h-5 text-secondary" />
+                          </div>
+                          {formData.gameFormat === 'head_to_head' && <Check className="w-5 h-5 text-primary" />}
+                        </div>
+                        <p className="font-display font-bold mt-3">Head-to-Head</p>
+                        <p className="text-xs text-muted-foreground mt-1">Face one opponent each week. Win the matchup and build a W-L record.</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, gameFormat: 'leaderboard' })}
+                        className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                          formData.gameFormat === 'leaderboard'
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border bg-card hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-pending/15 flex items-center justify-center">
+                            <ListOrdered className="w-5 h-5 text-pending" />
+                          </div>
+                          {formData.gameFormat === 'leaderboard' && <Check className="w-5 h-5 text-primary" />}
+                        </div>
+                        <p className="font-display font-bold mt-3">Leaderboard</p>
+                        <p className="text-xs text-muted-foreground mt-1">Everyone plays the same scorecard. Score the most points and finish #1.</p>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <Label>Season Length</Label>
                     <div className="grid grid-cols-3 gap-2">
@@ -295,7 +344,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                         return (
                           <Button key={months} type="button" variant={formData.weeksCount === weeks ? 'default' : 'outline'} className="h-auto py-2 flex-col" onClick={() => setFormData({ ...formData, weeksCount: weeks })}>
                             <span>{months} month{months > 1 ? 's' : ''}</span>
-                            <span className="text-xs opacity-70">{weeks} matchups</span>
+                            <span className="text-xs opacity-70">{weeks} {isLeaderboard ? 'scoring weeks' : 'matchups'}</span>
                           </Button>
                         );
                       })}
@@ -331,7 +380,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     </div>
                     <div>
                       <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">3</div>
-                      <p className="text-xs mt-2">Weekly total wins</p>
+                      <p className="text-xs mt-2">{isLeaderboard ? 'Climb the board' : 'Weekly total wins'}</p>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-3">Want extra steps or minutes to matter? Open “Goal & scoring” on any task and switch it to Performance.</p>
@@ -403,7 +452,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     <Users className="w-8 h-8 text-primary" />
                   </div>
                   <h3 className="text-xl font-display font-bold">Bring in the Competition</h3>
-                  <p className="text-muted-foreground">Your rules are set. Invite friends, then schedule Week 1 from the League tab.</p>
+                  <p className="text-muted-foreground">Your rules are set. Invite friends, then start Week 1 from the League tab.</p>
                 </div>
 
                 {createdLeague?.invite_code && (
@@ -419,7 +468,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
                 <div className="rounded-xl bg-muted/50 p-4 text-sm">
                   <p className="font-semibold">What happens next?</p>
-                  <p className="text-muted-foreground mt-1">Once at least one opponent joins, the commissioner schedules Week 1. Matchups kick off Sunday and run through Saturday.</p>
+                  <p className="text-muted-foreground mt-1">
+                    {isLeaderboard
+                      ? 'Once at least one other player joins, start the season. Every player scores the same tasks and the leaderboard resets for a fresh race each Sunday.'
+                      : 'Once at least one opponent joins, the commissioner schedules Week 1. Matchups kick off Sunday and run through Saturday.'}
+                  </p>
                 </div>
 
                 <Button onClick={finishSetup} className="w-full" size="lg">
