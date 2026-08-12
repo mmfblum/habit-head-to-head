@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Zap, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,12 +6,11 @@ import { useTaskTemplatesByCategory, type TaskTemplate } from '@/hooks/useTaskTe
 import { useConfigureSeasonTasks } from '@/hooks/useLeagues';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
 import { type TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
-import { DifficultyQuickStart, type QuickStartDifficulty, DIFFICULTY_PRESETS } from './DifficultyQuickStart';
+import { DifficultyQuickStart, type StarterPackId, STARTER_PACKS } from './DifficultyQuickStart';
 import { TaskSummaryPreview } from './TaskSummaryPreview';
 import { CustomChallengeBuilder, type CustomChallengeValue } from './CustomChallengeBuilder';
 import { toast } from 'sonner';
 
-const RECOMMENDED_TASK_NAMES = ['Steps', 'Workout', 'Reading', 'Journaling', 'Wake Time'];
 const CUSTOM_CHALLENGE_PREFIX = 'Custom Challenge —';
 
 interface InitialTaskSetupDialogProps {
@@ -38,6 +37,7 @@ function serializeConfig(config: TaskConfigOverrides) {
 
 export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplete }: InitialTaskSetupDialogProps) {
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
+  const [defaultPackLoaded, setDefaultPackLoaded] = useState(false);
   const { groupedTemplates, isLoading: templatesLoading } = useTaskTemplatesByCategory();
   const configureTasks = useConfigureSeasonTasks();
 
@@ -63,6 +63,32 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
     return entry ? { templateId: entry[0], config: entry[1] } : undefined;
   }, [taskConfigs, customTemplateIds]);
 
+  const buildStarterPack = (packId: StarterPackId) => {
+    const pack = STARTER_PACKS[packId];
+    const next = new Map<string, TaskConfigOverrides>();
+
+    pack.tasks.forEach((taskName) => {
+      const template = allTemplates.find(
+        (candidate) => !customTemplateIds.has(candidate.id) && candidate.name === taskName
+      );
+      if (!template) return;
+      const baseConfig = getInitialConfig(template);
+      const overrides = pack.overrides?.[taskName] || {};
+      next.set(template.id, { ...baseConfig, ...overrides, scoring_mode: 'binary' });
+    });
+
+    return next;
+  };
+
+  useEffect(() => {
+    if (!open || defaultPackLoaded || templatesLoading || allTemplates.length === 0 || taskConfigs.size > 0) return;
+    const classic = buildStarterPack('classic');
+    if (classic.size >= 3) {
+      setTaskConfigs(classic);
+      setDefaultPackLoaded(true);
+    }
+  }, [open, defaultPackLoaded, templatesLoading, allTemplates, taskConfigs.size]);
+
   const handleToggleTask = (taskId: string, template: TaskTemplate) => {
     setTaskConfigs((previous) => {
       const next = new Map(previous);
@@ -87,24 +113,13 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
 
   const handleClearAll = () => setTaskConfigs(new Map());
 
-  const handleQuickStart = (difficulty: QuickStartDifficulty) => {
+  const handleQuickStart = (packId: StarterPackId) => {
     if (!groupedTemplates) return;
-    const preset = DIFFICULTY_PRESETS[difficulty];
-    const next = new Map<string, TaskConfigOverrides>();
-
-    RECOMMENDED_TASK_NAMES.forEach((taskName) => {
-      const template = allTemplates.find(
-        (candidate) => !customTemplateIds.has(candidate.id) && candidate.name.includes(taskName)
-      );
-      if (!template) return;
-      const baseConfig = getInitialConfig(template);
-      const presetValues = preset.values[taskName as keyof typeof preset.values];
-      next.set(template.id, { ...baseConfig, ...presetValues });
-    });
-
+    const next = buildStarterPack(packId);
     if (customChallengeValue) next.set(customChallengeValue.templateId, customChallengeValue.config);
     setTaskConfigs(next);
-    toast.success(`Daily game loaded with ${next.size} scoring chances.`);
+    setDefaultPackLoaded(true);
+    toast.success(`${STARTER_PACKS[packId].label} loaded with ${next.size} scoring chances.`);
   };
 
   const handleSaveRules = async () => {
@@ -142,7 +157,7 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
             Build the Daily Game
           </DialogTitle>
           <DialogDescription>
-            Choose what scores each day. Goal scoring is the simple default: hit the target, earn the same base points.
+            Classic Zrizin is loaded for you. Keep it, choose another starter pack, or personalize anything below.
           </DialogDescription>
         </DialogHeader>
 
@@ -193,7 +208,7 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
             {configureTasks.isPending ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving Game...</>
             ) : (
-              <>Save Daily Game<Check className="w-4 h-4 ml-2" /></>
+              <>Use This Scorecard<Check className="w-4 h-4 ml-2" /></>
             )}
           </Button>
           {taskConfigs.size < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}
