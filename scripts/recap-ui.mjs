@@ -8,13 +8,12 @@ if (!text.includes("import { WeeklyRecapDialog } from '@/components/recap/Weekly
   text = text.replace(importAnchor, `${importAnchor}import { WeeklyRecapDialog } from '@/components/recap/WeeklyRecapDialog';\n`);
 }
 
-if (!text.includes('<WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />')) {
-  const renderAnchor = `      </main>\n    </div>\n  );`;
-  if (!text.includes(renderAnchor)) throw new Error('Missing recap render anchor');
-  text = text.replace(
-    renderAnchor,
-    `      </main>\n      <WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />\n    </div>\n  );`
-  );
-}
+const recapLine = '      <WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />\n';
+text = text.replaceAll(recapLine, '');
+
+const renderAnchor = `      </main>\n    </div>\n  );`;
+const index = text.lastIndexOf(renderAnchor);
+if (index < 0) throw new Error('Missing final Dashboard render anchor');
+text = `${text.slice(0, index)}      </main>\n${recapLine}    </div>\n  );${text.slice(index + renderAnchor.length)}`;
 
 fs.writeFileSync('src/pages/Dashboard.tsx', text);
