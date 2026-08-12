@@ -2,20 +2,11 @@ import { useState } from 'react';
 import { Eye, Link2, RefreshCcw, Share2, ShieldOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAccountabilityShare } from '@/hooks/useAccountabilityShare';
+import { shareZrizinLink } from '@/lib/nativeShare';
 import { toast } from 'sonner';
 
 interface AccountabilityShareCardProps {
   leagueId: string;
-}
-
-async function shareLink(url: string) {
-  const text = 'I put my goals on the record. Check whether I am actually keeping them on Zrizin.';
-  if (navigator.share) {
-    await navigator.share({ title: 'My Zrizin Accountability', text, url });
-    return;
-  }
-  await navigator.clipboard.writeText(url);
-  toast.success('Accountability link copied');
 }
 
 export function AccountabilityShareCard({ leagueId }: AccountabilityShareCardProps) {
@@ -29,7 +20,12 @@ export function AccountabilityShareCard({ leagueId }: AccountabilityShareCardPro
     try {
       const token = activeToken ?? await create.mutateAsync();
       const url = `${window.location.origin}/accountability/${token}`;
-      await shareLink(url);
+      const result = await shareZrizinLink({
+        title: 'My Zrizin Accountability',
+        text: 'I put my goals on the record. Check whether I am actually keeping them on Zrizin.',
+        url,
+      });
+      if (result === 'copied') toast.success('Accountability link copied');
     } catch (error) {
       if ((error as Error)?.name !== 'AbortError') {
         toast.error(error instanceof Error ? error.message : 'Could not share progress');
