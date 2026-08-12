@@ -26,6 +26,13 @@ function getTimeRemaining(endDate?: string) {
   return `${minutes}m left`;
 }
 
+function Avatar({ value, alt }: { value: string; alt: string }) {
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return <img src={value} alt={alt} className="w-full h-full object-cover" />;
+  }
+  return <span>{value}</span>;
+}
+
 export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: MatchupCardProps) {
   const { user, opponent, userScore, opponentScore, week, status } = matchup;
   const [timeRemaining, setTimeRemaining] = useState(() => getTimeRemaining(weekEndDate));
@@ -94,30 +101,20 @@ export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: 
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 text-center min-w-0">
           <div className="w-12 h-12 rounded-xl bg-primary/15 mx-auto mb-2 flex items-center justify-center text-2xl overflow-hidden">
-            {user.avatar}
+            <Avatar value={user.avatar} alt={user.username} />
           </div>
           <p className="font-semibold text-sm truncate">You</p>
           <p className={`score-text text-3xl mt-1 ${isWinning ? 'text-primary' : ''}`}>
             {userScore.toLocaleString()}
           </p>
-          {!compact && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {user.wins}-{user.losses}
-            </p>
-          )}
+          {!compact && <p className="text-xs text-muted-foreground mt-1">{user.wins}-{user.losses}</p>}
         </div>
 
         <div className="flex flex-col items-center gap-1">
           <div className={`w-11 h-11 rounded-full flex items-center justify-center ${
             isWinning ? 'bg-primary/20' : isTied ? 'bg-muted' : 'bg-loss/20'
           }`}>
-            {isWinning ? (
-              <TrendingUp className="w-5 h-5 text-primary" />
-            ) : isTied ? (
-              <Minus className="w-5 h-5 text-muted-foreground" />
-            ) : (
-              <TrendingDown className="w-5 h-5 text-loss" />
-            )}
+            {isWinning ? <TrendingUp className="w-5 h-5 text-primary" /> : isTied ? <Minus className="w-5 h-5 text-muted-foreground" /> : <TrendingDown className="w-5 h-5 text-loss" />}
           </div>
           <span className={`text-xs font-bold ${
             isWinning ? 'text-primary' : isTied ? 'text-muted-foreground' : 'text-loss'
@@ -128,32 +125,20 @@ export function MatchupCard({ matchup, compact = false, weekEndDate, onClick }: 
 
         <div className="flex-1 text-center min-w-0">
           <div className="w-12 h-12 rounded-xl bg-loss/10 mx-auto mb-2 flex items-center justify-center text-2xl overflow-hidden">
-            {opponent.avatar}
+            <Avatar value={opponent.avatar} alt={opponent.username} />
           </div>
           <p className="font-semibold text-sm truncate">{opponent.username}</p>
           <p className={`score-text text-3xl mt-1 ${!isWinning && !isTied ? 'text-loss' : ''}`}>
             {opponentScore.toLocaleString()}
           </p>
-          {!compact && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {opponent.wins}-{opponent.losses}
-            </p>
-          )}
+          {!compact && <p className="text-xs text-muted-foreground mt-1">{opponent.wins}-{opponent.losses}</p>}
         </div>
       </div>
 
       <div className="mt-4">
         <div className="h-2 bg-muted rounded-full overflow-hidden flex">
-          <motion.div
-            className="bg-gradient-primary"
-            animate={{ width: `${userShare}%` }}
-            transition={{ duration: 0.45, ease: 'easeOut' }}
-          />
-          <motion.div
-            className="bg-loss/60"
-            animate={{ width: `${opponentShare}%` }}
-            transition={{ duration: 0.45, ease: 'easeOut' }}
-          />
+          <motion.div className="bg-gradient-primary" animate={{ width: `${userShare}%` }} transition={{ duration: 0.45, ease: 'easeOut' }} />
+          <motion.div className="bg-loss/60" animate={{ width: `${opponentShare}%` }} transition={{ duration: 0.45, ease: 'easeOut' }} />
         </div>
       </div>
     </motion.button>
