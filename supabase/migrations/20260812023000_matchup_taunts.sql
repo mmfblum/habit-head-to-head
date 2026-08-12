@@ -2,7 +2,7 @@
 -- MATCHUP TAUNTS
 -- =============================================================================
 -- Lightweight rivalry interaction: a participant can send a short taunt during
--- an active matchup. It appears in the league feed and creates an in-app
+-- a live matchup. It appears in the league feed and creates an in-app
 -- notification for the opponent.
 -- =============================================================================
 
@@ -52,8 +52,8 @@ BEGIN
         RAISE EXCEPTION 'Matchup not found';
     END IF;
 
-    IF matchup_rec.status = 'completed' THEN
-        RAISE EXCEPTION 'This matchup is already final';
+    IF matchup_rec.status <> 'in_progress' THEN
+        RAISE EXCEPTION 'Taunts open when the matchup goes live';
     END IF;
 
     IF sender_id = matchup_rec.user1_id THEN
@@ -113,4 +113,4 @@ REVOKE ALL ON FUNCTION public.send_matchup_taunt(UUID, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.send_matchup_taunt(UUID, TEXT) TO authenticated;
 
 COMMENT ON FUNCTION public.send_matchup_taunt IS
-'Sends a short taunt between active matchup participants, creating a league feed event and opponent notification.';
+'Sends a short taunt between live matchup participants, creating a league feed event and opponent notification.';
