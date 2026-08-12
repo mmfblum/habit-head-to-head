@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
 import { useCurrentMatchup } from '@/hooks/useCurrentMatchup';
+import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { TASK_ICONS } from '@/types/checkin';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -49,6 +50,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
+  const { data: notifications = [] } = useNotifications();
 
   const currentWeek = leagueDetails?.current_week;
   const { data: scheduledMatchup, isLoading: matchupLoading } = useCurrentMatchup(currentWeek?.id);
@@ -56,6 +58,7 @@ export default function Dashboard() {
   const hasActiveSeason = leagueDetails?.current_season?.status === 'active';
   const seasonId = hasActiveSeason ? leagueDetails?.current_season?.id : undefined;
   const { data: realTasks = [], isLoading: tasksLoading } = useTasksWithCheckins(seasonId, new Date());
+  const unreadCount = notifications.filter(notification => !notification.read_at).length;
 
   if (leagueLoading || matchupLoading) return <DashboardSkeleton />;
   if (!leagueDetails) return <DashboardSkeleton />;
@@ -180,10 +183,15 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/notifications')}
-              className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
-              aria-label="Notifications"
+              className="relative w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+              aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
             >
               <Bell className="w-4 h-4 text-muted-foreground" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-loss text-loss-foreground text-[9px] font-bold flex items-center justify-center ring-2 ring-background">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => navigate('/profile')}
