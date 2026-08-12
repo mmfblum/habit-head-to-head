@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Flame, Target, Calendar, Award, Settings, LogOut, User as UserIcon, Trash2, LogOutIcon } from 'lucide-react';
+import { Trophy, Flame, Target, Calendar, Award, Settings, LogOut, User as UserIcon, Trash2, LogOutIcon, ListOrdered } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
@@ -114,38 +114,71 @@ export default function Profile() {
     await signOut();
   };
 
-  const currentMember = league?.members.find(member => member.user_id === user?.id);
+  const currentMember = league?.members.find((member) => member.user_id === user?.id);
   const isOwner = currentMember?.role === 'owner';
   const isMember = !!currentMember;
+  const isLeaderboard = league?.game_format === 'leaderboard';
   const avatarDisplay = profile?.avatar_url || profile?.display_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || '👤';
   const isAvatarUrl = avatarDisplay.startsWith('http://') || avatarDisplay.startsWith('https://');
+  const weeklySorted = [...(league?.members ?? [])].sort((a, b) => b.weekly_points - a.weekly_points);
+  const weeklyIndex = weeklySorted.findIndex((member) => member.user_id === user?.id);
+  const weeklyRank = weeklyIndex >= 0
+    ? weeklySorted.findIndex((member) => member.weekly_points === weeklySorted[weeklyIndex].weekly_points) + 1
+    : undefined;
 
-  const statCards = [
-    {
-      icon: Trophy,
-      label: 'Season Rank',
-      value: currentMember?.current_rank ? `#${currentMember.current_rank}` : '—',
-      subtext: league ? `of ${league.members.length}` : 'No league',
-    },
-    {
-      icon: Award,
-      label: 'Record',
-      value: currentMember ? `${currentMember.wins}-${currentMember.losses}${currentMember.ties ? `-${currentMember.ties}` : ''}` : '—',
-      subtext: currentMember?.ties ? 'W-L-T' : 'W-L',
-    },
-    {
-      icon: Flame,
-      label: 'Streak',
-      value: currentMember?.current_streak ? `${currentMember.current_streak}${currentMember.streak_type || ''}` : '—',
-      subtext: currentMember?.streak_type === 'W' ? 'Winning streak' : currentMember?.streak_type === 'L' ? 'Losing streak' : 'No streak',
-    },
-    {
-      icon: Target,
-      label: 'Season Points',
-      value: currentMember?.total_points?.toLocaleString() ?? '0',
-      subtext: `${currentMember?.weekly_points?.toLocaleString() ?? '0'} this week`,
-    },
-  ];
+  const statCards = isLeaderboard
+    ? [
+        {
+          icon: Trophy,
+          label: 'Season Rank',
+          value: currentMember?.current_rank ? `#${currentMember.current_rank}` : '—',
+          subtext: league ? `of ${league.members.length}` : 'No league',
+        },
+        {
+          icon: ListOrdered,
+          label: 'Weekly Rank',
+          value: weeklyRank ? `#${weeklyRank}` : '—',
+          subtext: league ? `of ${league.members.length}` : 'No league',
+        },
+        {
+          icon: Target,
+          label: 'Week Points',
+          value: currentMember?.weekly_points?.toLocaleString() ?? '0',
+          subtext: 'Current scoring week',
+        },
+        {
+          icon: Award,
+          label: 'Season Points',
+          value: currentMember?.total_points?.toLocaleString() ?? '0',
+          subtext: 'Cumulative total',
+        },
+      ]
+    : [
+        {
+          icon: Trophy,
+          label: 'Season Rank',
+          value: currentMember?.current_rank ? `#${currentMember.current_rank}` : '—',
+          subtext: league ? `of ${league.members.length}` : 'No league',
+        },
+        {
+          icon: Award,
+          label: 'Record',
+          value: currentMember ? `${currentMember.wins}-${currentMember.losses}${currentMember.ties ? `-${currentMember.ties}` : ''}` : '—',
+          subtext: currentMember?.ties ? 'W-L-T' : 'W-L',
+        },
+        {
+          icon: Flame,
+          label: 'Streak',
+          value: currentMember?.current_streak ? `${currentMember.current_streak}${currentMember.streak_type || ''}` : '—',
+          subtext: currentMember?.streak_type === 'W' ? 'Winning streak' : currentMember?.streak_type === 'L' ? 'Losing streak' : 'No streak',
+        },
+        {
+          icon: Target,
+          label: 'Season Points',
+          value: currentMember?.total_points?.toLocaleString() ?? '0',
+          subtext: `${currentMember?.weekly_points?.toLocaleString() ?? '0'} this week`,
+        },
+      ];
 
   if (isLoadingProfile || leagueLoading) {
     return (
@@ -162,7 +195,7 @@ export default function Profile() {
             <Skeleton className="h-4 w-56" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+            {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-28 rounded-xl" />)}
           </div>
         </main>
       </div>
@@ -174,7 +207,7 @@ export default function Profile() {
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border safe-top">
         <div className="px-4 py-3 flex items-center justify-between">
           <h1 className="font-display font-bold text-xl">Profile</h1>
-          <Button variant="ghost" size="icon" onClick={() => setIsEditing(prev => !prev)}>
+          <Button variant="ghost" size="icon" onClick={() => setIsEditing((previous) => !previous)}>
             <Settings className="w-5 h-5" />
           </Button>
         </div>
@@ -199,7 +232,7 @@ export default function Profile() {
           <p className="text-sm text-muted-foreground mt-1">{user?.email}</p>
           {league && (
             <p className="text-xs text-primary font-medium mt-2">
-              {league.name} • {currentMember?.role || 'member'}
+              {league.name} • {isLeaderboard ? 'Leaderboard' : 'Head-to-Head'} • {currentMember?.role || 'member'}
             </p>
           )}
         </motion.section>
@@ -215,7 +248,7 @@ export default function Profile() {
               <Input
                 id="display-name"
                 value={displayName}
-                onChange={event => setDisplayName(event.target.value)}
+                onChange={(event) => setDisplayName(event.target.value)}
                 placeholder="Your name"
                 maxLength={40}
               />
@@ -225,7 +258,7 @@ export default function Profile() {
               <Input
                 id="avatar-url"
                 value={avatarUrl}
-                onChange={event => setAvatarUrl(event.target.value)}
+                onChange={(event) => setAvatarUrl(event.target.value)}
                 placeholder="https://..."
               />
             </div>
@@ -298,7 +331,9 @@ export default function Profile() {
               <p className="text-xs text-muted-foreground mt-1">
                 {isOwner
                   ? 'As owner, you can delete the league if you want to end it for everyone.'
-                  : 'Leaving removes you from the league and future matchups.'}
+                  : isLeaderboard
+                    ? 'Leaving removes you from this leaderboard and future scoring weeks.'
+                    : 'Leaving removes you from the league and future matchups.'}
               </p>
             </div>
             <Separator />
@@ -315,7 +350,7 @@ export default function Profile() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete {league.name}?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This permanently deletes the league, its season, standings, scores, matchups, tasks, and check-in history for everyone. This cannot be undone.
+                      This permanently deletes the league, its season, standings, scores, tasks, and check-in history for everyone. This cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -341,7 +376,7 @@ export default function Profile() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Leave {league.name}?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      You will be removed from the league and future matchups. You can only rejoin later with an invite code.
+                      You will be removed from the league and future competition. You can only rejoin later with an invite code.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
