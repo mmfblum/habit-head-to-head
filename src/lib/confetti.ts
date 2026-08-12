@@ -12,3 +12,6 @@ export function burstConfetti() {
     // no-op if confetti isn't available (SSR or blocked env)
   }
 }
+
+// Backward-compatible name used by the newer check-in flow.
+export const triggerConfetti = burstConfetti;
