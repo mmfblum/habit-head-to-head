@@ -4,6 +4,7 @@ import { QuickStats } from '@/components/StatsGrid';
 import { TaskCard } from '@/components/TaskCard';
 import { LeaderboardRaceCard } from '@/components/leaderboard/LeaderboardRaceCard';
 import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';
+import { WeeklyRecapDialog } from '@/components/recap/WeeklyRecapDialog';
 import { CheckCircle2, ChevronRight, Zap, Bell, UserPlus, Trophy, Target, CalendarDays, ListOrdered } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
@@ -39,6 +40,7 @@ function DashboardSkeleton() {
           {[1, 2, 3].map((item) => <Skeleton key={item} className="h-24 rounded-xl" />)}
         </div>
       </main>
+      <WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />
     </div>
   );
 }
