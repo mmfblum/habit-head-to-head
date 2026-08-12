@@ -8,6 +8,7 @@ import { useMatchupActivity, useMatchupScores } from '@/hooks/useMatchupActivity
 import { useTaskBreakdown } from '@/hooks/useTaskBreakdown';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useDailyMatchupNotifications } from '@/hooks/useNotifications';
+import { useCurrentMatchup } from '@/hooks/useCurrentMatchup';
 import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,30 +17,33 @@ export default function Matchup() {
   const { user: authUser } = useAuth();
   const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
 
-  // Get current week and members
   const currentWeek = leagueDetails?.current_week;
   const members = leagueDetails?.members || [];
-  
-  // For now, pick the first other member as opponent (can be enhanced with matchups table later)
   const currentMember = members.find(m => m.user_id === authUser?.id);
-  const opponent = members.find(m => m.user_id !== authUser?.id);
+
+  // The schedule is the source of truth for this week's opponent. Never infer
+  // an opponent from member ordering; that breaks in leagues with 3+ members.
+  const { data: scheduledMatchup, isLoading: matchupLoading } = useCurrentMatchup(currentWeek?.id);
+  const opponentId = scheduledMatchup
+    ? scheduledMatchup.user1_id === authUser?.id
+      ? scheduledMatchup.user2_id
+      : scheduledMatchup.user1_id
+    : undefined;
+  const opponent = members.find(m => m.user_id === opponentId);
 
   const userIds = [currentMember?.user_id, opponent?.user_id].filter(Boolean) as string[];
 
-  // Real-time scores
   const { data: scoresMap, isLoading: scoresLoading } = useMatchupScores(
     currentWeek?.id,
     userIds
   );
 
-  // Real-time activity feed
   const { data: activityEvents, isLoading: activityLoading, setIsAtTop } = useMatchupActivity({
     weekId: currentWeek?.id,
     userIds,
     enabled: !!currentWeek?.id && userIds.length === 2,
   });
 
-  // Task breakdown comparison
   const { data: taskBreakdown, isLoading: tasksLoading } = useTaskBreakdown({
     seasonId: leagueDetails?.current_season?.id,
     weekId: currentWeek?.id,
@@ -47,7 +51,6 @@ export default function Matchup() {
     opponentId: opponent?.user_id,
   });
 
-  // Build participant data
   const userScore = scoresMap?.get(currentMember?.user_id || '') || 0;
   const opponentScore = scoresMap?.get(opponent?.user_id || '') || 0;
 
@@ -65,11 +68,10 @@ export default function Matchup() {
     score: opponentScore,
   };
 
-  const isLoading = leagueLoading || scoresLoading;
+  const isLoading = leagueLoading || matchupLoading || scoresLoading;
   const isWinning = userScore > opponentScore;
   const scoreDiff = Math.abs(userScore - opponentScore);
 
-  // Always call hooks before conditional returns (React rules of hooks)
   useDailyMatchupNotifications({
     leagueId: leagueDetails?.id,
     opponentName: opponent?.display_name ?? 'Opponent',
@@ -89,14 +91,20 @@ export default function Matchup() {
     );
   }
 
-  if (!currentWeek || !opponent) {
+  if (!currentWeek || !scheduledMatchup || !opponent || !currentMember) {
+    const hasEnoughMembers = members.length > 1;
+
     return (
       <div className="min-h-screen bg-background pb-24 flex items-center justify-center">
-        <div className="text-center p-8">
-          <div className="text-5xl mb-4">🏟️</div>
-          <h2 className="text-xl font-bold mb-2">No Active Matchup</h2>
+        <div className="text-center p-8 max-w-sm">
+          <div className="text-5xl mb-4">{hasEnoughMembers ? '🏟️' : '👥'}</div>
+          <h2 className="text-xl font-bold mb-2">
+            {hasEnoughMembers ? 'No Matchup This Week' : 'Invite an Opponent'}
+          </h2>
           <p className="text-muted-foreground text-sm">
-            Wait for the season to start or for matchups to be generated.
+            {hasEnoughMembers
+              ? 'You may have a bye this week, or the season schedule is still being prepared.'
+              : 'Head-to-head competition starts once another player joins your league.'}
           </p>
         </div>
       </div>
@@ -105,17 +113,15 @@ export default function Matchup() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Scoreboard Header */}
       <MatchupScoreboard
         user={userParticipant}
         opponent={opponentParticipant}
         weekNumber={currentWeek.week_number}
         weekEndDate={currentWeek.end_date}
-        isLive={!currentWeek.is_locked}
+        isLive={!currentWeek.is_locked && scheduledMatchup.status !== 'completed'}
       />
 
       <main className="px-4 py-4 space-y-6">
-        {/* Tabbed content: Activity & Tasks */}
         <Tabs defaultValue="activity" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-3">
             <TabsTrigger value="activity" className="flex items-center gap-1.5">
@@ -153,7 +159,6 @@ export default function Matchup() {
           </TabsContent>
         </Tabs>
 
-        {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3">
           <PowerUpButton weekId={currentWeek.id} />
           <motion.button
@@ -165,7 +170,6 @@ export default function Matchup() {
           </motion.button>
         </div>
 
-        {/* Head-to-head summary */}
         <section className="card-elevated rounded-xl p-4">
           <h3 className="font-semibold text-sm mb-3">This Week's Battle</h3>
           <div className="flex items-center justify-between">
@@ -192,27 +196,26 @@ export default function Matchup() {
               </span>
             </div>
           </div>
-          
-          {/* Score progress bar */}
+
           <div className="mt-4">
             <div className="h-2 bg-muted rounded-full overflow-hidden flex">
-              <motion.div 
+              <motion.div
                 className="bg-gradient-primary"
                 initial={{ width: 0 }}
-                animate={{ 
-                  width: `${userScore + opponentScore > 0 
-                    ? (userScore / (userScore + opponentScore)) * 100 
-                    : 50}%` 
+                animate={{
+                  width: `${userScore + opponentScore > 0
+                    ? (userScore / (userScore + opponentScore)) * 100
+                    : 50}%`
                 }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
               />
-              <motion.div 
+              <motion.div
                 className="bg-loss/60"
                 initial={{ width: 0 }}
-                animate={{ 
-                  width: `${userScore + opponentScore > 0 
-                    ? (opponentScore / (userScore + opponentScore)) * 100 
-                    : 50}%` 
+                animate={{
+                  width: `${userScore + opponentScore > 0
+                    ? (opponentScore / (userScore + opponentScore)) * 100
+                    : 50}%`
                 }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
               />
