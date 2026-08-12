@@ -1,0 +1,384 @@
+name: Validate and promote Zrizin release candidate v2
+
+on:
+  push:
+    branches:
+      - 'agent/zrizin-release-candidate'
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout release candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply transactional league hooks
+        run: |
+          cat > src/hooks/useLeagues.ts <<'TS'
+          import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+          import { supabase } from '@/integrations/supabase/client';
+          import { useAuth } from './useAuth';
+          import type { Tables } from '@/integrations/supabase/types';
+
+          export type League = Tables<'leagues'>;
+          export type LeagueMember = Tables<'league_members'>;
+          export type Season = Tables<'seasons'>;
+
+          export function useUserLeagues() {
+            const { user } = useAuth();
+            return useQuery({
+              queryKey: ['user-leagues', user?.id],
+              queryFn: async () => {
+                if (!user) return [];
+                const { data, error } = await supabase
+                  .from('league_members')
+                  .select(`*, leagues (*)`)
+                  .eq('user_id', user.id);
+                if (error) throw error;
+                return data;
+              },
+              enabled: !!user,
+            });
+          }
+
+          export function useCreateLeague() {
+            const { user } = useAuth();
+            const queryClient = useQueryClient();
+            return useMutation({
+              mutationFn: async ({ name, description }: { name: string; description?: string }) => {
+                if (!user) throw new Error('Must be logged in');
+                const { data: createdId, error: createError } = await supabase.rpc(
+                  'create_league' as never,
+                  { _name: name, _description: description ?? null } as never
+                );
+                if (createError) throw createError;
+
+                const leagueId = createdId as unknown as string;
+                if (!leagueId) throw new Error('League creation did not return an id');
+
+                const { data: league, error: leagueError } = await supabase
+                  .from('leagues')
+                  .select('*')
+                  .eq('id', leagueId)
+                  .single();
+                if (leagueError) throw leagueError;
+                return league;
+              },
+              onSuccess: async () => {
+                await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
+                await queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+                await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
+              },
+            });
+          }
+
+          export function useCreateSeason() {
+            const queryClient = useQueryClient();
+            return useMutation({
+              mutationFn: async ({ leagueId, name, weeksCount, startDate }: {
+                leagueId: string;
+                name: string;
+                weeksCount: number;
+                startDate: Date;
+              }) => {
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + weeksCount * 7);
+                const { data: existingSeasons } = await supabase
+                  .from('seasons')
+                  .select('season_number')
+                  .eq('league_id', leagueId)
+                  .order('season_number', { ascending: false })
+                  .limit(1);
+                const seasonNumber = (existingSeasons?.[0]?.season_number ?? 0) + 1;
+                const { data: season, error } = await supabase
+                  .from('seasons')
+                  .insert({
+                    league_id: leagueId,
+                    name,
+                    season_number: seasonNumber,
+                    weeks_count: weeksCount,
+                    start_date: startDate.toISOString().split('T')[0],
+                    end_date: endDate.toISOString().split('T')[0],
+                    status: 'draft',
+                  })
+                  .select()
+                  .single();
+                if (error) throw error;
+                return season;
+              },
+              onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-leagues'] }),
+            });
+          }
+
+          export function useConfigureSeasonTasks() {
+            const queryClient = useQueryClient();
+            return useMutation({
+              mutationFn: async ({ seasonId, taskConfigs }: {
+                seasonId: string;
+                taskConfigs: Array<{
+                  task_template_id: string;
+                  config_overrides?: Record<string, string | number | boolean | null>;
+                  max_daily_points?: number;
+                  display_order: number;
+                }>;
+              }) => {
+                const configsToInsert = taskConfigs.map((config) => ({
+                  season_id: seasonId,
+                  task_template_id: config.task_template_id,
+                  config_overrides: config.config_overrides || {},
+                  max_daily_points: config.max_daily_points || 100,
+                  display_order: config.display_order,
+                  is_enabled: true,
+                }));
+                const { data, error } = await supabase
+                  .from('league_task_configs')
+                  .insert(configsToInsert)
+                  .select();
+                if (error) throw error;
+                return data;
+              },
+              onSuccess: () => queryClient.invalidateQueries({ queryKey: ['league-task-configs'] }),
+            });
+          }
+
+          export function useJoinLeague() {
+            const { user } = useAuth();
+            const queryClient = useQueryClient();
+            return useMutation({
+              mutationFn: async (inviteCode: string) => {
+                if (!user) throw new Error('Must be logged in');
+                const { data, error } = await supabase.rpc(
+                  'join_league_by_code' as never,
+                  { _invite_code: inviteCode.trim() } as never
+                );
+                if (error) throw error;
+                return data as unknown as string;
+              },
+              onSuccess: async () => {
+                await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
+                await queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+                await queryClient.invalidateQueries({ queryKey: ['league-details'] });
+                await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
+              },
+            });
+          }
+          TS
+
+          cat > src/hooks/useLeagueActions.ts <<'TS'
+          import { useMutation, useQueryClient } from '@tanstack/react-query';
+          import { supabase } from '@/integrations/supabase/client';
+          import { useAuth } from './useAuth';
+          import { toast } from 'sonner';
+
+          export function useDeleteLeague() {
+            const { user } = useAuth();
+            const queryClient = useQueryClient();
+            return useMutation({
+              mutationFn: async (leagueId: string) => {
+                if (!user) throw new Error('Must be logged in');
+                const { error } = await supabase.rpc(
+                  'delete_league' as never,
+                  { _league_id: leagueId } as never
+                );
+                if (error) throw error;
+                return { success: true };
+              },
+              onSuccess: () => {
+                toast.success('League deleted successfully');
+                queryClient.invalidateQueries({ queryKey: ['user-leagues'] });
+                queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+                queryClient.invalidateQueries({ queryKey: ['league-details'] });
+              },
+              onError: (error: Error) => toast.error(error.message || 'Failed to delete league'),
+            });
+          }
+
+          export function useLeaveLeague() {
+            const { user } = useAuth();
+            const queryClient = useQueryClient();
+            return useMutation({
+              mutationFn: async (leagueId: string) => {
+                if (!user) throw new Error('Must be logged in');
+                const { error } = await supabase.rpc(
+                  'leave_league' as never,
+                  { _league_id: leagueId } as never
+                );
+                if (error) throw error;
+                return { success: true };
+              },
+              onSuccess: () => {
+                toast.success('Left league successfully');
+                queryClient.invalidateQueries({ queryKey: ['user-leagues'] });
+                queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+                queryClient.invalidateQueries({ queryKey: ['league-details'] });
+              },
+              onError: (error: Error) => toast.error(error.message || 'Failed to leave league'),
+            });
+          }
+          TS
+
+      - name: Wire shared progress semantics and preseason copy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          demo = Path('src/pages/CheckinDemo.tsx')
+          demo.write_text(demo.read_text().replace(
+              "config: timerConfig as any",
+              "config: timerConfig as TaskWithTemplate['config']"
+          ))
+
+          tasks = Path('src/pages/Tasks.tsx')
+          text = tasks.read_text()
+          if "@/lib/taskProgress" not in text:
+              anchor = "import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';"
+              if anchor in text:
+                  text = text.replace(anchor, anchor + "\nimport { isTaskGoalMet } from '@/lib/taskProgress';")
+              else:
+                  text = text.replace("import { cn } from '@/lib/utils';", "import { cn } from '@/lib/utils';\nimport { isTaskGoalMet } from '@/lib/taskProgress';")
+          text = re.sub(
+              r"  const completedCount = tasks\.filter\(t => \{.*?\}\)\.length;",
+              "  const completedCount = tasks.filter(isTaskGoalMet).length;",
+              text,
+              flags=re.S,
+          )
+          tasks.write_text(text)
+
+          dashboard = Path('src/pages/Dashboard.tsx')
+          text = dashboard.read_text()
+          if "@/lib/taskProgress" not in text:
+              anchor = "import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';"
+              if anchor in text:
+                  text = text.replace(anchor, anchor + "\nimport { isTaskGoalMet } from '@/lib/taskProgress';")
+              else:
+                  text = text.replace("import { Skeleton } from '@/components/ui/skeleton';", "import { Skeleton } from '@/components/ui/skeleton';\nimport { isTaskGoalMet } from '@/lib/taskProgress';")
+
+          if "const isPreseason" not in text:
+              text = text.replace(
+                  "  const hasActiveSeason = leagueDetails?.current_season?.status === 'active';",
+                  "  const hasActiveSeason = leagueDetails?.current_season?.status === 'active';\n  const isPreseason = leagueDetails?.current_season?.status === 'draft';"
+              )
+              text = text.replace(
+                  "  const hasActiveSeason = hasLeague && leagueDetails.current_season?.status === 'active';",
+                  "  const hasActiveSeason = hasLeague && leagueDetails.current_season?.status === 'active';\n  const isPreseason = hasLeague && leagueDetails.current_season?.status === 'draft';"
+              )
+
+          text = text.replace(
+              "completed: !!task.todayCheckin?.boolean_value || currentValue >= target,",
+              "completed: isTaskGoalMet(task),"
+          )
+          text = text.replace(
+              "totalMembers > 1 ? 'Bye Week' : 'Invite Opponents'",
+              "isPreseason ? 'Preseason' : totalMembers > 1 ? 'Bye Week' : 'Invite Opponents'"
+          )
+          dashboard.write_text(text)
+
+          matchup = Path('src/pages/Matchup.tsx')
+          text = matchup.read_text()
+          needle = "    const hasEnoughMembers = members.length > 1;"
+          if needle in text and "const isPreseason = leagueDetails?.current_season?.status === 'draft';" not in text:
+              text = text.replace(needle, needle + "\n    const isPreseason = leagueDetails?.current_season?.status === 'draft';")
+          text = text.replace(
+              "{hasEnoughMembers ? 'No Matchup This Week' : 'Invite an Opponent'}",
+              "{isPreseason ? 'Preseason' : hasEnoughMembers ? 'No Matchup This Week' : 'Invite an Opponent'}"
+          )
+          text = text.replace(
+              "{hasEnoughMembers\n              ? 'You have a bye this week. Keep scoring for season points and get ready for your next opponent.'\n              : 'Head-to-head competition starts once another player joins your league.'}",
+              "{isPreseason\n              ? 'Your league is formed, but the head-to-head schedule is not live yet. The commissioner schedules Week 1 from the League tab.'\n              : hasEnoughMembers\n                ? 'You have a bye this week. Keep scoring for season points and get ready for your next opponent.'\n                : 'Head-to-head competition starts once another player joins your league.'}"
+          )
+          matchup.write_text(text)
+          PY
+
+      - name: Verify expected rewrites landed
+        run: |
+          grep -q "create_league' as never" src/hooks/useLeagues.ts
+          grep -q "delete_league' as never" src/hooks/useLeagueActions.ts
+          grep -q "isTaskGoalMet" src/pages/Tasks.tsx
+          grep -q "isTaskGoalMet" src/pages/Dashboard.tsx
+          grep -q "const isPreseason" src/pages/Dashboard.tsx
+          ! grep -q "timerConfig as any" src/pages/CheckinDemo.tsx
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Lint repository
+        run: npm run lint
+
+      - name: Commit validated candidate and promote PR branch
+        run: |
+          cat > .github/workflows/ci.yml <<'YAML'
+          name: Zrizin CI
+
+          on:
+            pull_request:
+              branches: [main]
+            push:
+              branches:
+                - main
+                - 'agent/**'
+
+          jobs:
+            validate:
+              runs-on: ubuntu-latest
+              timeout-minutes: 10
+
+              steps:
+                - name: Checkout
+                  uses: actions/checkout@v4
+
+                - name: Use Node.js
+                  uses: actions/setup-node@v4
+                  with:
+                    node-version: 20
+                    cache: npm
+
+                - name: Install dependencies
+                  run: npm ci
+
+                - name: Run tests
+                  run: npm test
+
+                - name: Build
+                  run: npm run build
+
+                - name: Lint
+                  run: npm run lint
+          YAML
+
+          rm -f .github/workflows/normalize-demo-once.yml
+          rm -f .github/workflows/finalize-ci-once.yml
+          rm -f .github/workflows/finalize-zrizin-once.yml
+          rm -f .github/workflows/promote-zrizin-once.yml
+          rm -f .github/workflows/promote-zrizin-v2-once.yml
+          rm -f BUILD_MILESTONE.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Finalize validated Zrizin competitive loop"
+
+          git fetch origin agent/competitive-loop-foundation
+          git merge-base --is-ancestor origin/agent/competitive-loop-foundation HEAD
+
+          git push origin HEAD:agent/zrizin-release-candidate HEAD:agent/competitive-loop-foundation
