@@ -19,23 +19,30 @@ function getRank(sorted: LeagueMemberWithProfile[], userId?: string) {
 
 export function LeaderboardRaceCard({ members, currentUserId, weekNumber = 1, onOpen }: LeaderboardRaceCardProps) {
   const sorted = [...members].sort((a, b) => b.weekly_points - a.weekly_points);
+  const hasScoring = sorted.some((member) => member.weekly_points > 0);
   const current = sorted.find((member) => member.user_id === currentUserId);
-  const rank = getRank(sorted, currentUserId);
+  const rank = hasScoring ? getRank(sorted, currentUserId) : undefined;
   const leader = sorted[0];
   const playerIndex = sorted.findIndex((member) => member.user_id === currentUserId);
   const playerAhead = playerIndex > 0 ? sorted[playerIndex - 1] : undefined;
   const gapToNext = current && playerAhead ? Math.max(playerAhead.weekly_points - current.weekly_points + 1, 0) : 0;
   const gapToLead = current && leader ? Math.max(leader.weekly_points - current.weekly_points, 0) : 0;
+  const secondPlace = sorted.find((member) => member.weekly_points < (leader?.weekly_points ?? 0));
+  const leadMargin = current && rank === 1 && secondPlace
+    ? current.weekly_points - secondPlace.weekly_points
+    : 0;
 
-  const statusText = !current || !rank
-    ? 'Score your first task to enter the race.'
-    : rank === 1
-      ? sorted.length > 1
-        ? `You lead by ${Math.max(current.weekly_points - sorted[1].weekly_points, 0)} pts.`
-        : 'You are setting the pace.'
-      : gapToNext <= 1
-        ? 'Your next point moves you up.'
-        : `${gapToNext} pts to move into #${rank - 1}.`;
+  const statusText = !hasScoring
+    ? 'First score takes the lead.'
+    : !current || !rank
+      ? 'Score a task to enter the race.'
+      : rank === 1
+        ? secondPlace
+          ? `You lead by ${leadMargin} pts.`
+          : 'You are tied for the lead.'
+        : gapToNext <= 1
+          ? 'Your next point moves you up.'
+          : `${gapToNext} pts to move into #${rank - 1}.`;
 
   return (
     <motion.button
@@ -65,7 +72,7 @@ export function LeaderboardRaceCard({ members, currentUserId, weekNumber = 1, on
       <div className="mt-5 grid grid-cols-3 gap-2">
         {sorted.slice(0, 3).map((member, index) => (
           <div key={member.user_id} className={`rounded-xl p-2.5 ${member.user_id === currentUserId ? 'bg-primary/10 ring-1 ring-primary/25' : 'bg-background/60'}`}>
-            <p className="text-[10px] text-muted-foreground">#{index + 1}</p>
+            <p className="text-[10px] text-muted-foreground">{hasScoring ? `#${getRank(sorted, member.user_id)}` : 'Tied'}</p>
             <p className="text-xs font-semibold truncate mt-0.5">{member.user_id === currentUserId ? 'You' : member.display_name || 'Player'}</p>
             <p className="score-text text-sm mt-1">{member.weekly_points.toLocaleString()}</p>
           </div>
