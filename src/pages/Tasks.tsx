@@ -143,7 +143,7 @@ export default function Tasks() {
                 </button>
               ))}
             </div>
-            {isToday && <DeviceSyncCard />}
+            {isToday && <DeviceSyncCard tasks={tasks} date={selectedDate} />}
           </>
         )}
 
