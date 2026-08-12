@@ -1,3 +1,5 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
 export type HealthMetric = 'steps' | 'workouts' | 'screen_time_minutes';
 export type NativeHealthPlatform = 'ios' | 'android';
 export type NativeHealthSource = 'apple_health' | 'health_connect' | 'screen_time' | 'android_usage';
@@ -25,26 +27,45 @@ export interface HealthAuthorizationResult {
   denied: HealthMetric[];
 }
 
-/**
- * Contract implemented by a future native iOS/Android shell (for example via a
- * Capacitor plugin). The web/PWA build intentionally does not pretend it can
- * read protected device health or screen-time stores directly.
- */
 export interface ZrizinNativeHealthBridge {
   platform: NativeHealthPlatform;
   requestAuthorization(metrics: HealthMetric[]): Promise<HealthAuthorizationResult>;
   readDailySnapshot(date: string): Promise<DailyHealthSnapshot>;
 }
 
+interface NativeHealthPlugin {
+  requestAuthorization(options: { metrics: HealthMetric[] }): Promise<HealthAuthorizationResult>;
+  readDailySnapshot(options: { date: string }): Promise<DailyHealthSnapshot>;
+}
+
+const CapacitorHealth = registerPlugin<NativeHealthPlugin>('ZrizinHealth');
+
 declare global {
   interface Window {
+    // Kept as an injected fallback for local native prototypes and tests. Real
+    // Capacitor builds use the registered ZrizinHealth plugin above.
     ZrizinHealth?: ZrizinNativeHealthBridge;
   }
 }
 
-export function getNativeHealthBridge(): ZrizinNativeHealthBridge | null {
+function getInjectedBridge(): ZrizinNativeHealthBridge | null {
   if (typeof window === 'undefined') return null;
   return window.ZrizinHealth ?? null;
+}
+
+export function getNativeHealthBridge(): ZrizinNativeHealthBridge | null {
+  if (Capacitor.isNativePlatform()) {
+    const platform = Capacitor.getPlatform();
+    if (platform === 'ios' || platform === 'android') {
+      return {
+        platform,
+        requestAuthorization: (metrics) => CapacitorHealth.requestAuthorization({ metrics }),
+        readDailySnapshot: (date) => CapacitorHealth.readDailySnapshot({ date }),
+      };
+    }
+  }
+
+  return getInjectedBridge();
 }
 
 export function hasNativeHealthBridge(): boolean {
@@ -54,5 +75,5 @@ export function hasNativeHealthBridge(): boolean {
 export function getHealthIntegrationLabel(): string {
   const bridge = getNativeHealthBridge();
   if (!bridge) return 'Manual tracking on web';
-  return bridge.platform === 'ios' ? 'Apple Health ready' : 'Health Connect ready';
+  return bridge.platform === 'ios' ? 'Apple Health available' : 'Health Connect available';
 }
