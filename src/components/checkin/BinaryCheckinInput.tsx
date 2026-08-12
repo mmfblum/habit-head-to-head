@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { Check, X } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 interface BinaryCheckinInputProps {
@@ -10,47 +9,38 @@ interface BinaryCheckinInputProps {
   label?: string;
 }
 
-export function BinaryCheckinInput({
-  value,
-  onChange,
-  disabled = false,
-  label = 'Completed',
-}: BinaryCheckinInputProps) {
+export function BinaryCheckinInput({ value, onChange, disabled = false, label = 'Did you complete it?' }: BinaryCheckinInputProps) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-3">
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="grid grid-cols-2 gap-2">
         <motion.button
-          whileTap={{ scale: 0.95 }}
+          whileTap={{ scale: 0.97 }}
           onClick={() => !disabled && onChange(false)}
           className={cn(
-            'w-10 h-10 rounded-xl flex items-center justify-center transition-all',
-            !value && !disabled
-              ? 'bg-loss/20 text-loss ring-1 ring-loss/50'
-              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            'h-11 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition-all border',
+            !value
+              ? 'bg-loss/10 text-loss border-loss/30'
+              : 'bg-muted/60 text-muted-foreground border-border hover:bg-muted'
           )}
           disabled={disabled}
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
+          Missed
         </motion.button>
-        <Switch
-          checked={value}
-          onCheckedChange={onChange}
-          disabled={disabled}
-          className="data-[state=checked]:bg-primary"
-        />
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={() => !disabled && onChange(true)}
           className={cn(
-            'w-10 h-10 rounded-xl flex items-center justify-center transition-all',
-            value && !disabled
-              ? 'bg-primary/20 text-primary ring-1 ring-primary/50'
-              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            'h-11 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all border',
+            value
+              ? 'bg-primary text-primary-foreground border-primary shadow-[0_0_20px_hsl(var(--primary)/0.2)]'
+              : 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20'
           )}
           disabled={disabled}
         >
-          <Check className="w-5 h-5" />
+          <Check className="w-4 h-4" />
+          Done — score it
         </motion.button>
       </div>
     </div>
