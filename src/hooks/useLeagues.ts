@@ -6,6 +6,7 @@ import type { Tables } from '@/integrations/supabase/types';
 export type League = Tables<'leagues'>;
 export type LeagueMember = Tables<'league_members'>;
 export type Season = Tables<'seasons'>;
+export type LeagueGameFormat = 'head_to_head' | 'leaderboard';
 
 export function useUserLeagues() {
   const { user } = useAuth();
@@ -35,12 +36,25 @@ export function useCreateLeague() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ name, description }: { name: string; description?: string }) => {
+    mutationFn: async ({
+      name,
+      description,
+      gameFormat = 'head_to_head',
+    }: {
+      name: string;
+      description?: string;
+      gameFormat?: LeagueGameFormat;
+    }) => {
       if (!user) throw new Error('Must be logged in');
 
       const { data: league, error: leagueError } = await supabase
         .from('leagues')
-        .insert({ name, description, created_by: user.id })
+        .insert({
+          name,
+          description,
+          created_by: user.id,
+          game_format: gameFormat,
+        } as never)
         .select()
         .single();
 
@@ -56,7 +70,7 @@ export function useCreateLeague() {
 
       if (memberError) throw memberError;
 
-      return league;
+      return league as typeof league & { game_format: LeagueGameFormat };
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
