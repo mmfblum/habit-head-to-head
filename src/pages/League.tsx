@@ -17,6 +17,8 @@ import { addDays, format, parseISO } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';
+import { PunishmentSettingsCard } from '@/components/league/PunishmentSettingsCard';
+import { LeaderboardConsequenceCard } from '@/components/leaderboard/LeaderboardConsequenceCard';
 
 export default function League() {
   const navigate = useNavigate();
@@ -178,6 +180,7 @@ export default function League() {
 
       <main className="px-4 py-4 space-y-6">
         {isSolo && <AccountabilityShareCard leagueId={league.id} />}
+        {!isSolo && <PunishmentSettingsCard leagueId={league.id} isAdmin={!!isAdmin} />}
         {!currentSeason && (
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card-elevated rounded-xl p-6 text-center">
             <Trophy className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
@@ -317,6 +320,15 @@ export default function League() {
               })}
             </div>
           </section>
+        )}
+
+        {isActive && isLeaderboard && currentWeek && (
+          <LeaderboardConsequenceCard
+            weekId={currentWeek.id}
+            isLocked={currentWeek.is_locked}
+            members={league.members}
+            currentUserId={user?.id}
+          />
         )}
 
         {isActive && isHeadToHead && currentWeek && weekMatchups.length > 0 && (
