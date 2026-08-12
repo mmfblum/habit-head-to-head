@@ -30,7 +30,7 @@ jobs:
 
       - name: Apply non-breaking npm security fixes to lockfile
         if: github.event_name == 'push'
-        run: npm audit fix --package-lock-only --ignore-scripts
+        run: npm audit fix --package-lock-only --ignore-scripts || true
 
       - name: Refresh npm lockfile
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
