@@ -57,18 +57,19 @@ export default function Matchup() {
   const isLiveGame = scheduledMatchup?.status === 'in_progress';
   const isFinal = scheduledMatchup?.status === 'completed';
   const isScheduled = scheduledMatchup?.status === 'scheduled';
+  const canShowGameData = isLiveGame || isFinal;
 
   const { data: scoresMap, isLoading: scoresLoading } = useMatchupScores(currentWeek?.id, userIds);
 
   const { data: activityEvents, isLoading: activityLoading, setIsAtTop } = useMatchupActivity({
-    weekId: currentWeek?.id,
+    weekId: canShowGameData ? currentWeek?.id : undefined,
     userIds,
-    enabled: isLiveGame && !!currentWeek?.id && userIds.length === 2,
+    enabled: canShowGameData && !!currentWeek?.id && userIds.length === 2,
   });
 
   const { data: taskBreakdown, isLoading: tasksLoading } = useTaskBreakdown({
-    seasonId: isLiveGame ? leagueDetails?.current_season?.id : undefined,
-    weekId: isLiveGame ? currentWeek?.id : undefined,
+    seasonId: canShowGameData ? leagueDetails?.current_season?.id : undefined,
+    weekId: canShowGameData ? currentWeek?.id : undefined,
     userId: currentMember?.user_id,
     opponentId: opponent?.user_id,
   });
@@ -220,7 +221,7 @@ export default function Matchup() {
           </div>
         )}
 
-        {!isScheduled && (
+        {canShowGameData && (
           <Tabs defaultValue="activity" className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-3">
               <TabsTrigger value="activity" className="flex items-center gap-1.5">
