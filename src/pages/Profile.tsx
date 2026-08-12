@@ -30,6 +30,12 @@ interface ProfileData {
   timezone: string | null;
 }
 
+const MASCOTS = [
+  '🦅', '🦁', '🐺', '🦈', '🐂', '🦍', '🐻', '🐯',
+  '🐓', '🦊', '🦬', '🐉', '⚡', '🚀', '💀', '🔥',
+  '👑', '🛡️', '🏆', '🥷', '🦸', '🧠', '🎯', '💪',
+];
+
 export default function Profile() {
   const { user, signOut } = useAuth();
   const { data: league, isLoading: leagueLoading } = useUserPrimaryLeague();
@@ -107,7 +113,7 @@ export default function Profile() {
     setDisplayName(normalized.display_name ?? '');
     setAvatarUrl(normalized.avatar_url ?? '');
     setIsEditing(false);
-    toast.success('Profile updated');
+    toast.success('Player identity updated');
   };
 
   const handleSignOut = async () => {
@@ -241,10 +247,10 @@ export default function Profile() {
           <motion.section
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            className="card-elevated rounded-xl p-4 space-y-4"
+            className="card-elevated rounded-xl p-4 space-y-5"
           >
             <div className="space-y-2">
-              <Label htmlFor="display-name">Display name</Label>
+              <Label htmlFor="display-name">Player name</Label>
               <Input
                 id="display-name"
                 value={displayName}
@@ -253,18 +259,44 @@ export default function Profile() {
                 maxLength={40}
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="avatar-url">Avatar image URL</Label>
+              <div>
+                <Label>Choose your mascot</Label>
+                <p className="text-xs text-muted-foreground mt-1">Pick the identity your opponents will see all season.</p>
+              </div>
+              <div className="grid grid-cols-8 gap-2">
+                {MASCOTS.map((mascot) => (
+                  <button
+                    type="button"
+                    key={mascot}
+                    onClick={() => setAvatarUrl(mascot)}
+                    className={`aspect-square rounded-xl text-xl flex items-center justify-center border transition-all ${
+                      avatarUrl === mascot
+                        ? 'border-primary bg-primary/15 ring-1 ring-primary/30 scale-105'
+                        : 'border-border bg-muted/40 hover:border-primary/40'
+                    }`}
+                    aria-label={`Choose ${mascot} mascot`}
+                  >
+                    {mascot}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="avatar-url">Or use a photo URL</Label>
               <Input
                 id="avatar-url"
-                value={avatarUrl}
+                value={avatarUrl.startsWith('http') ? avatarUrl : ''}
                 onChange={(event) => setAvatarUrl(event.target.value)}
                 placeholder="https://..."
               />
+              <p className="text-[11px] text-muted-foreground">Photo upload can be added once the native app shell is in place.</p>
             </div>
             <div className="flex gap-2">
               <Button onClick={handleSave} disabled={isSaving} className="flex-1">
-                {isSaving ? 'Saving...' : 'Save Profile'}
+                {isSaving ? 'Saving...' : 'Save Identity'}
               </Button>
               <Button
                 variant="outline"
