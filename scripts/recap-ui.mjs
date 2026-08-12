@@ -1,21 +1,20 @@
 import fs from 'node:fs';
 
-function replaceOnce(text, oldValue, newValue, label) {
-  if (!text.includes(oldValue)) throw new Error(`Missing patch target: ${label}`);
-  return text.replace(oldValue, newValue);
+let text = fs.readFileSync('src/pages/Dashboard.tsx', 'utf8');
+
+if (!text.includes("import { WeeklyRecapDialog } from '@/components/recap/WeeklyRecapDialog';")) {
+  const importAnchor = "import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';\n";
+  if (!text.includes(importAnchor)) throw new Error('Missing recap import anchor');
+  text = text.replace(importAnchor, `${importAnchor}import { WeeklyRecapDialog } from '@/components/recap/WeeklyRecapDialog';\n`);
 }
 
-let text = fs.readFileSync('src/pages/Dashboard.tsx', 'utf8');
-text = replaceOnce(
-  text,
-  "import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';\n",
-  "import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';\nimport { WeeklyRecapDialog } from '@/components/recap/WeeklyRecapDialog';\n",
-  'recap import',
-);
-text = replaceOnce(
-  text,
-  `      </main>\n    </div>\n  );`,
-  `      </main>\n      <WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />\n    </div>\n  );`,
-  'recap dialog',
-);
+if (!text.includes('<WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />')) {
+  const renderAnchor = `      </main>\n    </div>\n  );`;
+  if (!text.includes(renderAnchor)) throw new Error('Missing recap render anchor');
+  text = text.replace(
+    renderAnchor,
+    `      </main>\n      <WeeklyRecapDialog seasonId={leagueDetails?.current_season?.id} />\n    </div>\n  );`
+  );
+}
+
 fs.writeFileSync('src/pages/Dashboard.tsx', text);
