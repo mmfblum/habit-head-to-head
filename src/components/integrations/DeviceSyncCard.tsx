@@ -6,7 +6,7 @@ import { useSubmitCheckin } from '@/hooks/useTasksWithCheckins';
 import {
   getNativeHealthBridge,
   getHealthIntegrationLabel,
-  hasNativeHealthBridge,
+  type HealthMetric,
 } from '@/lib/nativeHealthBridge';
 import type { TaskWithTemplate } from '@/types/checkin';
 
@@ -27,6 +27,10 @@ function isStepsTask(task: TaskWithTemplate) {
 
 function isWorkoutTask(task: TaskWithTemplate) {
   return /workout|exercise/i.test(normalizedTaskName(task));
+}
+
+function isScreenTimeTask(task: TaskWithTemplate) {
+  return /screen\s*time/i.test(normalizedTaskName(task));
 }
 
 function formatLocalDate(date: Date) {
@@ -53,7 +57,9 @@ function rememberHealthConnection() {
 }
 
 export function DeviceSyncCard({ tasks, date = new Date() }: DeviceSyncCardProps) {
-  const nativeReady = hasNativeHealthBridge();
+  const bridge = getNativeHealthBridge();
+  const nativeReady = bridge !== null;
+  const screenTimeSupported = bridge?.platform === 'android';
   const submitCheckin = useSubmitCheckin();
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -62,26 +68,46 @@ export function DeviceSyncCard({ tasks, date = new Date() }: DeviceSyncCardProps
   const mappedTasks = useMemo(() => ({
     steps: tasks.find(isStepsTask),
     workout: tasks.find(isWorkoutTask),
+    screenTime: tasks.find(isScreenTimeTask),
   }), [tasks]);
 
-  const mappedCount = Number(Boolean(mappedTasks.steps)) + Number(Boolean(mappedTasks.workout));
+  const mappedCount = Number(Boolean(mappedTasks.steps))
+    + Number(Boolean(mappedTasks.workout))
+    + Number(Boolean(mappedTasks.screenTime && screenTimeSupported));
 
   const syncSnapshot = async ({ requestPermission, announce }: { requestPermission: boolean; announce: boolean }) => {
-    const bridge = getNativeHealthBridge();
-    if (!bridge || mappedCount === 0) return;
+    const activeBridge = getNativeHealthBridge();
+    if (!activeBridge || mappedCount === 0) return;
 
     setIsSyncing(true);
     try {
+      const metrics: HealthMetric[] = [];
+      if (mappedTasks.steps) metrics.push('steps');
+      if (mappedTasks.workout) metrics.push('workouts');
+      if (mappedTasks.screenTime && activeBridge.platform === 'android') metrics.push('screen_time_minutes');
+
+      let screenAccessNeedsSettings = false;
       if (requestPermission) {
-        const requested = await bridge.requestAuthorization(['steps', 'workouts']);
-        if (requested.granted.length === 0) {
-          if (announce) toast.info('Health access was not granted. Manual scoring is still available.');
+        const requested = await activeBridge.requestAuthorization(metrics);
+        screenAccessNeedsSettings = requested.denied.includes('screen_time_minutes')
+          && activeBridge.platform === 'android'
+          && Boolean(mappedTasks.screenTime);
+
+        const grantedForSnapshot = requested.granted.length > 0;
+        if (!grantedForSnapshot && !screenAccessNeedsSettings) {
+          if (announce) toast.info('Device access was not granted. Manual scoring is still available.');
+          return;
+        }
+
+        if (!grantedForSnapshot && screenAccessNeedsSettings) {
+          await activeBridge.openScreenTimeSettings?.();
+          if (announce) toast.info('Enable Zrizin under Usage Access, then return and tap Refresh device data.');
           return;
         }
       }
 
-      const snapshot = await bridge.readDailySnapshot(formatLocalDate(date));
-      const source = snapshot.sources.includes('apple_health') ? 'apple_health' : 'health_connect';
+      const snapshot = await activeBridge.readDailySnapshot(formatLocalDate(date));
+      const healthSource = snapshot.sources.includes('apple_health') ? 'apple_health' : 'health_connect';
       const importedAt = new Date().toISOString();
       let changed = 0;
       let available = 0;
@@ -96,7 +122,7 @@ export function DeviceSyncCard({ tasks, date = new Date() }: DeviceSyncCardProps
             value: {
               numeric_value: value,
               metadata: {
-                source,
+                source: healthSource,
                 imported: true,
                 imported_at: importedAt,
                 native_metric: 'steps',
@@ -117,7 +143,7 @@ export function DeviceSyncCard({ tasks, date = new Date() }: DeviceSyncCardProps
             value: {
               duration_minutes: value,
               metadata: {
-                source,
+                source: healthSource,
                 imported: true,
                 imported_at: importedAt,
                 native_metric: 'workouts',
@@ -129,8 +155,36 @@ export function DeviceSyncCard({ tasks, date = new Date() }: DeviceSyncCardProps
         }
       }
 
+      if (mappedTasks.screenTime && activeBridge.platform === 'android' && typeof snapshot.screenTimeMinutes === 'number') {
+        available += 1;
+        const value = Math.max(0, Math.round(snapshot.screenTimeMinutes));
+        if (mappedTasks.screenTime.todayCheckin?.numeric_value !== value) {
+          await submitCheckin.mutateAsync({
+            taskInstanceId: mappedTasks.screenTime.id,
+            date,
+            value: {
+              numeric_value: value,
+              metadata: {
+                source: 'android_usage',
+                imported: true,
+                imported_at: importedAt,
+                native_metric: 'screen_time_minutes',
+                aggregate: 'app_foreground_minutes',
+              },
+            },
+          });
+          changed += 1;
+        }
+      }
+
       if (requestPermission && available > 0) rememberHealthConnection();
       setLastSync(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+
+      if (screenAccessNeedsSettings) {
+        await activeBridge.openScreenTimeSettings?.();
+        if (announce) toast.info('Steps/workouts synced. Enable Zrizin under Usage Access to add Screen Time too.');
+        return;
+      }
 
       if (!announce) return;
       if (available === 0) {
@@ -138,7 +192,7 @@ export function DeviceSyncCard({ tasks, date = new Date() }: DeviceSyncCardProps
       } else if (changed === 0) {
         toast.success('Device data is already up to date');
       } else {
-        toast.success(`Updated ${changed} scorecard ${changed === 1 ? 'task' : 'tasks'} from ${bridge.platform === 'ios' ? 'Apple Health' : 'Health Connect'}`);
+        toast.success(`Updated ${changed} scorecard ${changed === 1 ? 'task' : 'tasks'} from your device`);
       }
     } catch (error) {
       console.error('Device health sync failed', error);
@@ -175,8 +229,8 @@ export function DeviceSyncCard({ tasks, date = new Date() }: DeviceSyncCardProps
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             {nativeReady
-              ? `${getHealthIntegrationLabel()}. Sync verified Steps and Workout data into today's scorecard.`
-              : 'Web scoring stays manual. Install the native app to connect Apple Health or Health Connect.'}
+              ? `${getHealthIntegrationLabel()}. Sync supported device data into today's scorecard.`
+              : 'Web scoring stays manual. Install the native app to connect protected device data.'}
           </p>
           <div className="flex flex-wrap gap-2 mt-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-background px-2 py-1 text-[11px] text-muted-foreground">
@@ -185,8 +239,9 @@ export function DeviceSyncCard({ tasks, date = new Date() }: DeviceSyncCardProps
             <span className="inline-flex items-center gap-1 rounded-full bg-background px-2 py-1 text-[11px] text-muted-foreground">
               <Activity className="w-3 h-3" /> Workouts
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-background px-2 py-1 text-[11px] text-muted-foreground opacity-70">
-              <TimerReset className="w-3 h-3" /> Screen time · manual for now
+            <span className={`inline-flex items-center gap-1 rounded-full bg-background px-2 py-1 text-[11px] text-muted-foreground ${screenTimeSupported ? '' : 'opacity-70'}`}>
+              <TimerReset className="w-3 h-3" />
+              {screenTimeSupported ? 'Screen time · Android Usage Access' : 'Screen time · iOS approval required'}
             </span>
           </div>
           {nativeReady && (
