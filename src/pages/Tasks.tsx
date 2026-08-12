@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, Calendar, Eye, Flag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Eye, Flag, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DailyCheckinList } from '@/components/checkin';
+import { DeviceSyncCard } from '@/components/integrations/DeviceSyncCard';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';
+import { isTaskGoalMet } from '@/lib/taskProgress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -27,49 +29,32 @@ export default function Tasks() {
   const isWeekLive = isSeasonActive && weekPhase === 'live';
   const activeSeasonId = isWeekLive ? currentSeasonId : undefined;
 
-  const { data: tasks = [], isLoading: tasksLoading } = useTasksWithCheckins(
-    activeSeasonId,
-    selectedDate
-  );
+  const { data: tasks = [], isLoading: tasksLoading } = useTasksWithCheckins(activeSeasonId, selectedDate);
 
-  const completedCount = tasks.filter(t => {
-    if (t.input_type === 'binary') return t.todayCheckin?.boolean_value;
-    if (t.input_type === 'numeric') {
-      const config = t.config as Record<string, unknown>;
-      const threshold = (config.threshold as number) || (config.target as number) || (config.daily_cap as number) || 0;
-      return (t.todayCheckin?.numeric_value || 0) >= threshold;
-    }
-    if (t.input_type === 'duration') {
-      const config = t.config as Record<string, unknown>;
-      const threshold = (config.threshold as number) || (config.target as number) || 0;
-      return (t.todayCheckin?.duration_minutes || 0) >= threshold;
-    }
-    if (t.input_type === 'time') return !!t.todayCheckin?.time_value;
-    return false;
-  }).length;
-
+  const completedCount = tasks.filter(isTaskGoalMet).length;
+  const scoringChancesLeft = Math.max(tasks.length - completedCount, 0);
   const progress = tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
 
   const goToPreviousDay = () => {
-    setSelectedDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() - 1);
-      return newDate;
+    setSelectedDate((previous) => {
+      const next = new Date(previous);
+      next.setDate(next.getDate() - 1);
+      return next;
     });
   };
 
   const goToNextDay = () => {
-    setSelectedDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() + 1);
-      return newDate;
+    setSelectedDate((previous) => {
+      const next = new Date(previous);
+      next.setDate(next.getDate() + 1);
+      return next;
     });
   };
 
   const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-  const categories = ['All', 'Fitness', 'Sleep', 'Learning', 'Mindfulness', 'Productivity'];
+  const categories = ['All', 'Fitness', 'Sleep', 'Learning', 'Mindfulness', 'Productivity', 'Custom'];
   const filteredTasks = activeCategory && activeCategory !== 'All'
-    ? tasks.filter(t => t.template?.category?.toLowerCase() === activeCategory.toLowerCase())
+    ? tasks.filter((task) => task.template?.category?.toLowerCase() === activeCategory.toLowerCase())
     : tasks;
 
   return (
@@ -86,7 +71,7 @@ export default function Tasks() {
                 <Button variant="ghost" className="gap-2" disabled={!isWeekLive}>
                   <Calendar className="w-4 h-4" />
                   <span className="font-display font-bold">
-                    {isWeekLive ? (isToday ? 'Today' : format(selectedDate, 'EEE, MMM d')) : 'Tasks'}
+                    {isWeekLive ? (isToday ? 'Today’s Scoring' : format(selectedDate, 'EEE, MMM d')) : 'Tasks'}
                   </span>
                 </Button>
               </PopoverTrigger>
@@ -107,15 +92,18 @@ export default function Tasks() {
           </div>
 
           {isWeekLive && (
-            <div className="bg-card rounded-xl p-3">
+            <div className="bg-card rounded-xl p-3 border border-border/60">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">Daily Progress</span>
-                <span className="text-sm font-semibold">{completedCount}/{tasks.length} Complete</span>
+                <span className="text-sm text-muted-foreground">Daily Scorecard</span>
+                <span className="text-sm font-semibold">{completedCount}/{tasks.length} goals hit</span>
               </div>
               <Progress value={progress} className="h-2" />
               <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-muted-foreground">
-                  {isToday ? 'Keep scoring.' : format(selectedDate, 'MMMM d, yyyy')}
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Zap className="w-3 h-3" />
+                  {scoringChancesLeft === 0 && tasks.length > 0
+                    ? 'Perfect card — everything scored.'
+                    : `${scoringChancesLeft} scoring chance${scoringChancesLeft === 1 ? '' : 's'} left`}
                 </span>
                 <span className="score-text text-sm text-primary">{Math.round(progress)}%</span>
               </div>
@@ -126,22 +114,25 @@ export default function Tasks() {
 
       <main className="px-4 py-4">
         {isWeekLive && (
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2 -mx-4 px-4">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setActiveCategory(category === 'All' ? null : category)}
-                className={cn(
-                  'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-                  (category === 'All' && !activeCategory) || activeCategory === category
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                )}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2 -mx-4 px-4">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => setActiveCategory(category === 'All' ? null : category)}
+                  className={cn(
+                    'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
+                    (category === 'All' && !activeCategory) || activeCategory === category
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  )}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+            {isToday && <DeviceSyncCard />}
+          </>
         )}
 
         {isSeasonDraft ? (
