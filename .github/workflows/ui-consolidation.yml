@@ -5,14 +5,13 @@ on:
     branches:
       - agent/competitive-loop-foundation
     paths:
-      - .github/ui-consolidation.trigger
+      - '.github/ui-consolidation.trigger'
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[ui consolidation]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,8 +20,8 @@ jobs:
           fetch-depth: 0
 
       - name: Patch Profile and League UI
-        shell: python
         run: |
+          python3 - <<'PY'
           from pathlib import Path
 
           profile = Path('src/pages/Profile.tsx')
@@ -104,12 +103,12 @@ jobs:
           assert old_title in text
           text = text.replace(old_title, new_title, 1)
           league.write_text(text)
+          PY
 
-      - name: Clean up one-time workflow and commit
+      - name: Commit patch
         run: |
-          rm -f .github/ui-consolidation.trigger .github/workflows/ui-consolidation.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add src/pages/Profile.tsx src/pages/League.tsx
           git commit -m "[ui consolidation] Surface trophies and championship points"
           git push origin HEAD:agent/competitive-loop-foundation
