@@ -61,7 +61,7 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [celebration, setCelebration] = useState<CelebrationState | null>(null);
   const [value, setValue] = useState<CheckinValue>(() => ({
-    boolean_value: task.todayCheckin?.boolean_value ?? false,
+    boolean_value: task.todayCheckin?.boolean_value ?? undefined,
     numeric_value: task.todayCheckin?.numeric_value ?? 0,
     time_value: task.todayCheckin?.time_value ?? '',
     duration_minutes: task.todayCheckin?.duration_minutes ?? 0,
@@ -69,7 +69,7 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
 
   useEffect(() => {
     setValue({
-      boolean_value: task.todayCheckin?.boolean_value ?? false,
+      boolean_value: task.todayCheckin?.boolean_value ?? undefined,
       numeric_value: task.todayCheckin?.numeric_value ?? 0,
       time_value: task.todayCheckin?.time_value ?? '',
       duration_minutes: task.todayCheckin?.duration_minutes ?? 0,
@@ -168,7 +168,7 @@ export function CheckinCard({ task, date }: CheckinCardProps) {
   const renderInput = () => {
     switch (task.input_type) {
       case 'binary':
-        return <BinaryCheckinInput value={value.boolean_value ?? false} onChange={handleBinaryChange} disabled={isPending} />;
+        return <BinaryCheckinInput value={value.boolean_value} onChange={handleBinaryChange} disabled={isPending} />;
       case 'numeric':
         return (
           <NumericCheckinInput
