@@ -28,9 +28,6 @@ jobs:
           node-version: 20
           cache: npm
 
-      # One-time repair for the stale Lovable-era npm lockfile. On same-repo push
-      # runs this commits the canonical generated lock back to the branch. Once
-      # package-lock.json is synchronized this step becomes a no-op.
       - name: Refresh npm lockfile
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
@@ -56,3 +53,28 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha }}
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start clean local Supabase stack
+        run: supabase start
+
+      - name: Replay every migration from zero
+        run: supabase db reset --local
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: supabase stop --no-backup
