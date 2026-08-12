@@ -22,6 +22,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Health Connect requires a permission-usage destination. Until the
+                 public privacy-policy route is deployed this opens Zrizin itself;
+                 the release checklist requires replacing it with the final policy screen. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
         </activity>
 
         <provider
@@ -35,7 +42,12 @@
         </provider>
     </application>
 
-    <!-- Permissions -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
+    <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
 </manifest>
