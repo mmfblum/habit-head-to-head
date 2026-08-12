@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
-import { Plus, ChevronLeft, ChevronRight, Calendar, Eye, Flag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Eye, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DailyCheckinList } from '@/components/checkin';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
+import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -20,9 +20,12 @@ export default function Tasks() {
 
   const currentSeasonId = leagueDetails?.current_season?.id;
   const seasonStatus = leagueDetails?.current_season?.status;
+  const currentWeek = leagueDetails?.current_week;
+  const weekPhase = getCompetitionWeekPhase(currentWeek?.start_date, currentWeek?.end_date);
   const isSeasonDraft = seasonStatus === 'draft';
   const isSeasonActive = seasonStatus === 'active';
-  const activeSeasonId = isSeasonActive ? currentSeasonId : undefined;
+  const isWeekLive = isSeasonActive && weekPhase === 'live';
+  const activeSeasonId = isWeekLive ? currentSeasonId : undefined;
 
   const { data: tasks = [], isLoading: tasksLoading } = useTasksWithCheckins(
     activeSeasonId,
@@ -74,16 +77,16 @@ export default function Tasks() {
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border safe-top">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between mb-3">
-            <Button variant="ghost" size="icon" onClick={goToPreviousDay} disabled={!isSeasonActive}>
+            <Button variant="ghost" size="icon" onClick={goToPreviousDay} disabled={!isWeekLive}>
               <ChevronLeft className="w-5 h-5" />
             </Button>
 
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" className="gap-2" disabled={!isSeasonActive}>
+                <Button variant="ghost" className="gap-2" disabled={!isWeekLive}>
                   <Calendar className="w-4 h-4" />
                   <span className="font-display font-bold">
-                    {isSeasonActive ? (isToday ? 'Today' : format(selectedDate, 'EEE, MMM d')) : 'Tasks'}
+                    {isWeekLive ? (isToday ? 'Today' : format(selectedDate, 'EEE, MMM d')) : 'Tasks'}
                   </span>
                 </Button>
               </PopoverTrigger>
@@ -98,12 +101,12 @@ export default function Tasks() {
               </PopoverContent>
             </Popover>
 
-            <Button variant="ghost" size="icon" onClick={goToNextDay} disabled={!isSeasonActive || isToday}>
+            <Button variant="ghost" size="icon" onClick={goToNextDay} disabled={!isWeekLive || isToday}>
               <ChevronRight className="w-5 h-5" />
             </Button>
           </div>
 
-          {isSeasonActive && (
+          {isWeekLive && (
             <div className="bg-card rounded-xl p-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">Daily Progress</span>
@@ -122,7 +125,7 @@ export default function Tasks() {
       </header>
 
       <main className="px-4 py-4">
-        {isSeasonActive && (
+        {isWeekLive && (
           <div className="flex gap-2 mb-4 overflow-x-auto pb-2 -mx-4 px-4">
             {categories.map((category) => (
               <button
@@ -147,11 +150,25 @@ export default function Tasks() {
               <Flag className="w-8 h-8 text-secondary" />
             </div>
             <p className="text-[10px] uppercase tracking-wider text-secondary font-bold">Preseason</p>
-            <h2 className="text-xl font-display font-bold mt-1 mb-2">Week 1 hasn’t kicked off</h2>
+            <h2 className="text-xl font-display font-bold mt-1 mb-2">Week 1 hasn’t been scheduled</h2>
             <p className="text-muted-foreground mb-6">
-              League rules are set before kickoff. Once the commissioner starts the season, your daily check-ins appear here.
+              League rules are set before kickoff. Once the commissioner starts the season, the Sunday matchup schedule appears here.
             </p>
             <Button onClick={() => navigate('/league')}>Go to League</Button>
+          </div>
+        ) : isSeasonActive && weekPhase === 'scheduled' ? (
+          <div className="text-center py-12 max-w-sm mx-auto">
+            <div className="w-16 h-16 rounded-2xl bg-secondary/15 flex items-center justify-center mx-auto mb-4">
+              <Flag className="w-8 h-8 text-secondary" />
+            </div>
+            <p className="text-[10px] uppercase tracking-wider text-secondary font-bold">Matchup scheduled</p>
+            <h2 className="text-xl font-display font-bold mt-1 mb-2">
+              Check-ins unlock {formatWeekKickoff(currentWeek?.start_date)}
+            </h2>
+            <p className="text-muted-foreground mb-6">
+              Your opponent is set, but scoring stays locked until the Sunday-to-Saturday week begins.
+            </p>
+            <Button onClick={() => navigate('/matchup')}>View Matchup</Button>
           </div>
         ) : !currentSeasonId ? (
           <div className="text-center py-12">
@@ -168,22 +185,12 @@ export default function Tasks() {
               </Link>
             </div>
           </div>
-        ) : (
+        ) : isWeekLive ? (
           <DailyCheckinList tasks={filteredTasks} isLoading={tasksLoading || leagueLoading} />
-        )}
-
-        {isSeasonActive && (
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="w-full mt-6 p-4 rounded-xl border-2 border-dashed border-muted text-muted-foreground"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Plus className="w-5 h-5" />
-              <span className="font-medium">Custom tasks coming next</span>
-            </div>
-          </motion.button>
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="text-sm">This scoring week is closed.</p>
+          </div>
         )}
       </main>
     </div>
