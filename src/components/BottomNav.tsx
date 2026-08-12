@@ -14,8 +14,9 @@ export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: league } = useUserPrimaryLeague();
-  const isLeaderboard = league?.game_format === 'leaderboard';
-  const navItems = baseNavItems.filter((item) => !item.headToHeadOnly || !isLeaderboard);
+  const isHeadToHead = league?.game_format === 'head_to_head';
+  const isSolo = league?.game_format === 'solo';
+  const navItems = baseNavItems.filter((item) => !item.headToHeadOnly || isHeadToHead);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border safe-bottom">
@@ -31,7 +32,7 @@ export function BottomNav() {
               className={`nav-item flex-1 ${isActive ? 'nav-item-active' : 'nav-item-inactive'}`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <span className="text-[10px] font-medium">{isSolo && item.path === '/league' ? 'Progress' : item.label}</span>
             </button>
           );
         })}

@@ -16,6 +16,7 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 import CheckinDemo from "./pages/CheckinDemo";
+import Accountability from "./pages/Accountability";
 import { useUserLeagues } from "./hooks/useLeagues";
 import { useUserPrimaryLeague } from "./hooks/useLeagueDetails";
 
@@ -90,7 +91,7 @@ function HeadToHeadOnly({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (league?.game_format === 'leaderboard') {
+  if (league?.game_format && league.game_format !== 'head_to_head') {
     return <Navigate to="/league" replace />;
   }
 
@@ -99,11 +100,13 @@ function HeadToHeadOnly({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   const { user } = useAuth();
+  const location = useLocation();
   
   return (
     <div className="min-h-screen bg-background">
       <Routes>
         <Route path="/auth" element={<AuthRoute />} />
+        <Route path="/accountability/:token" element={<Accountability />} />
         <Route
           path="/"
           element={
@@ -182,7 +185,7 @@ function AppRoutes() {
         />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {user && <BottomNav />}
+      {user && !location.pathname.startsWith('/accountability/') && <BottomNav />}
     </div>
   );
 }

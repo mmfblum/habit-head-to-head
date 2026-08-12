@@ -20,7 +20,7 @@ interface LeaderboardRowProps {
   index: number;
   isCurrentUser?: boolean;
   isLowestScorer?: boolean;
-  competitionFormat?: 'head_to_head' | 'leaderboard';
+  competitionFormat?: 'head_to_head' | 'leaderboard' | 'solo';
 }
 
 function Avatar({ value, alt }: { value: string; alt: string }) {

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Copy, Gamepad2, ListOrdered, Share2, Swords, Trophy, Users, Zap } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Gamepad2, ListOrdered, Share2, Swords, Trophy, UserRound, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateLeague, useCreateSeason, useConfigureSeasonTasks } from '@/hooks/useLeagues';
 import type { LeagueGameFormat } from '@/hooks/useLeagues';
+import { useStartSeason } from '@/hooks/useSeasonActions';
 import { useTaskTemplatesByCategory, type TaskTemplate } from '@/hooks/useTaskTemplates';
 import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
@@ -59,6 +60,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const createLeague = useCreateLeague();
   const createSeason = useCreateSeason();
   const configureTasks = useConfigureSeasonTasks();
+  const startSeason = useStartSeason();
   const { groupedTemplates, isLoading: tasksLoading } = useTaskTemplatesByCategory();
 
   const allTemplates = useMemo(
@@ -210,6 +212,14 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
         taskConfigs: taskConfigArray,
       });
 
+      if (formData.gameFormat === 'solo') {
+        await startSeason.mutateAsync({ seasonId: createdSeason.id, gameFormat: 'solo' });
+        toast.success('Solo is live. Your goals are on the clock.');
+        onClose();
+        navigate('/tasks');
+        return;
+      }
+
       setStep('invite');
       toast.success('Your game is set. Now bring in the competition.');
     } catch {
@@ -226,10 +236,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const shareInvite = async () => {
     if (createdLeague?.invite_code && navigator.share) {
       try {
+        const inviteUrl = `${window.location.origin}/?join=${encodeURIComponent(createdLeague.invite_code)}`;
         await navigator.share({
           title: `Join ${formData.name} on Zrizin`,
-          text: `Use invite code: ${createdLeague.invite_code}`,
-          url: window.location.origin,
+          text: 'Tap the link to join my Zrizin league.',
+          url: inviteUrl,
         });
       } catch {
         copyInviteCode();
@@ -244,13 +255,19 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     navigate('/league');
   };
 
-  const steps = [
-    { id: 'details', label: 'League', icon: Trophy },
-    { id: 'tasks', label: 'Game', icon: Gamepad2 },
-    { id: 'invite', label: 'Friends', icon: Users },
-  ];
-  const currentStepIndex = steps.findIndex((item) => item.id === step);
   const isLeaderboard = formData.gameFormat === 'leaderboard';
+  const isSolo = formData.gameFormat === 'solo';
+  const steps = isSolo
+    ? [
+        { id: 'details', label: 'Solo', icon: UserRound },
+        { id: 'tasks', label: 'Goals', icon: Gamepad2 },
+      ]
+    : [
+        { id: 'details', label: 'League', icon: Trophy },
+        { id: 'tasks', label: 'Game', icon: Gamepad2 },
+        { id: 'invite', label: 'Friends', icon: Users },
+      ];
+  const currentStepIndex = steps.findIndex((item) => item.id === step);
 
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-auto">
@@ -294,7 +311,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 <div className="text-center mb-8">
                   <Trophy className="w-12 h-12 text-primary mx-auto mb-3" />
                   <h3 className="text-xl font-display font-bold">Build Your League</h3>
-                  <p className="text-muted-foreground">Choose how your group competes, then build the daily scorecard.</p>
+                  <p className="text-muted-foreground">Choose a competition format or make it personal with Solo accountability.</p>
                 </div>
 
                 <div className="space-y-4">
@@ -309,7 +326,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
                   <div className="space-y-2">
                     <Label>How should your league compete?</Label>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-3">
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, gameFormat: 'head_to_head' })}
@@ -347,6 +364,25 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                         <p className="font-display font-bold mt-3">Leaderboard</p>
                         <p className="text-xs text-muted-foreground mt-1">Everyone plays the same scorecard. Score the most points and finish #1.</p>
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, gameFormat: 'solo' })}
+                        className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                          formData.gameFormat === 'solo'
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border bg-card hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+                            <UserRound className="w-5 h-5 text-primary" />
+                          </div>
+                          {formData.gameFormat === 'solo' && <Check className="w-5 h-5 text-primary" />}
+                        </div>
+                        <p className="font-display font-bold mt-3">Solo</p>
+                        <p className="text-xs text-muted-foreground mt-1">Track your goals for yourself and share a live accountability page with friends.</p>
+                      </button>
                     </div>
                   </div>
 
@@ -358,7 +394,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                         return (
                           <Button key={months} type="button" variant={formData.weeksCount === weeks ? 'default' : 'outline'} className="h-auto py-2 flex-col" onClick={() => setFormData({ ...formData, weeksCount: weeks })}>
                             <span>{months} month{months > 1 ? 's' : ''}</span>
-                            <span className="text-xs opacity-70">{weeks} {isLeaderboard ? 'scoring weeks' : 'matchups'}</span>
+                            <span className="text-xs opacity-70">{weeks} {isSolo ? 'tracking weeks' : isLeaderboard ? 'scoring weeks' : 'matchups'}</span>
                           </Button>
                         );
                       })}
@@ -395,7 +431,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     </div>
                     <div>
                       <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">3</div>
-                      <p className="text-xs mt-2">{isLeaderboard ? 'Climb the board' : 'Weekly total wins'}</p>
+                      <p className="text-xs mt-2">{isSolo ? 'Keep the promise' : isLeaderboard ? 'Climb the board' : 'Weekly total wins'}</p>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-3">Want extra steps or minutes to matter? Open “Goal & scoring” on any task and switch it to Performance.</p>
@@ -451,8 +487,8 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 )}
 
                 <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-background via-background to-transparent">
-                  <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskConfigs.size < 3 || configureTasks.isPending}>
-                    {configureTasks.isPending ? 'Saving game...' : 'Use This Scorecard & Invite Friends'}
+                  <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskConfigs.size < 3 || configureTasks.isPending || startSeason.isPending}>
+                    {configureTasks.isPending || startSeason.isPending ? 'Saving game...' : isSolo ? 'Start Tracking Today' : 'Use This Scorecard & Invite Friends'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                   {taskConfigs.size < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}

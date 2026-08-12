@@ -16,6 +16,7 @@ import { useLeagueTaskConfigs } from '@/hooks/useLeagueTaskConfigs';
 import { addDays, format, parseISO } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';
 
 export default function League() {
   const navigate = useNavigate();
@@ -31,8 +32,10 @@ export default function League() {
   const currentWeek = league?.current_week;
   const weekPhase = getCompetitionWeekPhase(currentWeek?.start_date, currentWeek?.end_date);
   const isLeaderboard = league?.game_format === 'leaderboard';
+  const isSolo = league?.game_format === 'solo';
+  const isHeadToHead = league?.game_format === 'head_to_head';
   const { data: weekMatchups = [] } = useWeekMatchups(
-    !isLeaderboard && league?.current_season?.status === 'active' ? currentWeek?.id : undefined
+    isHeadToHead && league?.current_season?.status === 'active' ? currentWeek?.id : undefined
   );
 
   if (isLoading) {
@@ -74,12 +77,12 @@ export default function League() {
     );
   });
   const weeklySorted = [...league.members].sort((a, b) => b.weekly_points - a.weekly_points);
-  const lowestScorer = !isLeaderboard && isLiveWeek && weeklySorted.length > 1
+  const lowestScorer = isHeadToHead && isLiveWeek && weeklySorted.length > 1
     ? weeklySorted[weeklySorted.length - 1]
     : undefined;
 
   const scheduledIds = new Set(weekMatchups.flatMap((matchup) => [matchup.user1_id, matchup.user2_id]));
-  const byeMember = !isLeaderboard && league.members.length > 1
+  const byeMember = isHeadToHead && league.members.length > 1
     ? league.members.find((member) => !scheduledIds.has(member.user_id))
     : undefined;
 
@@ -128,13 +131,14 @@ export default function League() {
 
   const weeklyLeaderScore = weeklySorted[0]?.weekly_points ?? 0;
 
+  const formatLabel = isSolo ? 'Solo' : isLeaderboard ? 'Leaderboard' : 'Head-to-Head';
   const headerEyebrow = !currentSeason
     ? 'No season'
     : isDraft
-      ? `Season ${currentSeason.season_number} • Preseason • ${isLeaderboard ? 'Leaderboard' : 'Head-to-Head'}`
+      ? `Season ${currentSeason.season_number} • ${isSolo ? 'Setup' : 'Preseason'} • ${formatLabel}`
       : isScheduledWeek && currentWeek
         ? `Season ${currentSeason.season_number} • Week ${currentWeek.week_number} starts ${formatWeekKickoff(currentWeek.start_date)}`
-        : `Season ${currentSeason.season_number}${currentWeek ? ` • Week ${currentWeek.week_number}` : ''} • ${isLeaderboard ? 'Leaderboard' : 'Head-to-Head'}`;
+        : `Season ${currentSeason.season_number}${currentWeek ? ` • Week ${currentWeek.week_number}` : ''} • ${formatLabel}`;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -146,9 +150,11 @@ export default function League() {
               <h1 className="font-display font-bold text-xl">{league.name}</h1>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={copyInviteCode} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center" aria-label="Share league code">
-                <Share2 className="w-4 h-4 text-muted-foreground" />
-              </button>
+              {league.invite_code && (
+                <button onClick={copyInviteCode} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center" aria-label="Share league code">
+                  <Share2 className="w-4 h-4 text-muted-foreground" />
+                </button>
+              )}
               {isAdmin && currentSeason && (
                 <button onClick={() => setShowManageTasks(true)} className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors" aria-label="League settings">
                   <Settings className="w-4 h-4 text-primary" />
@@ -171,6 +177,7 @@ export default function League() {
       </header>
 
       <main className="px-4 py-4 space-y-6">
+        {isSolo && <AccountabilityShareCard leagueId={league.id} />}
         {!currentSeason && (
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card-elevated rounded-xl p-6 text-center">
             <Trophy className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
@@ -208,18 +215,20 @@ export default function League() {
                   <div className="flex-1">
                     <p className="text-[10px] uppercase tracking-wider text-primary font-bold">Preseason</p>
                     <h3 className="font-display font-bold text-lg mt-0.5">
-                      {isLeaderboard ? 'Ready to open the leaderboard' : 'Ready to set the schedule'}
+                      {isSolo ? 'Ready to start tracking' : isLeaderboard ? 'Ready to open the leaderboard' : 'Ready to set the schedule'}
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {league.members.length < 2
-                        ? `Your rules are set. Invite at least one ${isLeaderboard ? 'other player' : 'opponent'} before Week 1 can begin.`
-                        : isLeaderboard
-                          ? `${league.members.length} players are in. Starting now sets Week 1 for Sunday; everyone begins the weekly race at zero.`
-                          : `${league.members.length} players are in. Scheduling now locks the round-robin slate and sets Week 1 for the upcoming Sunday.`}
+                      {isSolo
+                        ? 'Your goals are set. Start now and Week 1 begins today.'
+                        : league.members.length < 2
+                          ? `Your rules are set. Invite at least one ${isLeaderboard ? 'other player' : 'opponent'} before Week 1 can begin.`
+                          : isLeaderboard
+                            ? `${league.members.length} players are in. Starting now sets Week 1 for Sunday; everyone begins the weekly race at zero.`
+                            : `${league.members.length} players are in. Scheduling now locks the round-robin slate and sets Week 1 for the upcoming Sunday.`}
                     </p>
 
                     <div className="flex items-center gap-2 mt-4">
-                      {league.members.length < 2 ? (
+                      {!isSolo && league.members.length < 2 ? (
                         <Button onClick={copyInviteCode} className="gap-2">
                           <Users className="w-4 h-4" />
                           Copy Invite Code
@@ -233,7 +242,7 @@ export default function League() {
                           {startSeason.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                           {startSeason.isPending
                             ? 'Starting...'
-                            : isLeaderboard ? 'Start Leaderboard' : 'Schedule Season 1'}
+                            : isSolo ? 'Start Solo Today' : isLeaderboard ? 'Start Leaderboard' : 'Schedule Season 1'}
                         </Button>
                       ) : (
                         <p className="text-sm text-muted-foreground">Waiting for the commissioner to start the season.</p>
@@ -310,7 +319,7 @@ export default function League() {
           </section>
         )}
 
-        {isActive && !isLeaderboard && currentWeek && weekMatchups.length > 0 && (
+        {isActive && isHeadToHead && currentWeek && weekMatchups.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Swords className="w-4 h-4 text-secondary" />
@@ -370,6 +379,7 @@ export default function League() {
           </section>
         )}
 
+        {!isSolo && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Trophy className="w-4 h-4 text-pending" />
@@ -397,6 +407,7 @@ export default function League() {
             </div>
           )}
         </section>
+        )}
 
         {isLiveWeek && currentSeason && currentWeek && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="card-elevated rounded-xl p-4">

@@ -3,6 +3,7 @@ import { MatchupCard } from '@/components/MatchupCard';
 import { QuickStats } from '@/components/StatsGrid';
 import { TaskCard } from '@/components/TaskCard';
 import { LeaderboardRaceCard } from '@/components/leaderboard/LeaderboardRaceCard';
+import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';
 import { CheckCircle2, ChevronRight, Zap, Bell, UserPlus, Trophy, Target, CalendarDays, ListOrdered } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
@@ -56,10 +57,12 @@ export default function Dashboard() {
   const { data: notifications = [] } = useNotifications();
 
   const isLeaderboard = leagueDetails?.game_format === 'leaderboard';
+  const isSolo = leagueDetails?.game_format === 'solo';
+  const isHeadToHead = leagueDetails?.game_format === 'head_to_head';
   const currentWeek = leagueDetails?.current_week;
   const weekPhase = getCompetitionWeekPhase(currentWeek?.start_date, currentWeek?.end_date);
   const { data: scheduledMatchup, isLoading: matchupLoading } = useCurrentMatchup(
-    isLeaderboard ? undefined : currentWeek?.id
+    isHeadToHead ? currentWeek?.id : undefined
   );
 
   const hasActiveSeason = leagueDetails?.current_season?.status === 'active';
@@ -68,7 +71,7 @@ export default function Dashboard() {
   const { data: realTasks = [], isLoading: tasksLoading } = useTasksWithCheckins(seasonId, new Date());
   const unreadCount = notifications.filter((notification) => !notification.read_at).length;
 
-  if (leagueLoading || (!isLeaderboard && matchupLoading)) return <DashboardSkeleton />;
+  if (leagueLoading || (isHeadToHead && matchupLoading)) return <DashboardSkeleton />;
   if (!leagueDetails) return <DashboardSkeleton />;
 
   const currentMember = leagueDetails.members.find((member) => member.user_id === user?.id);
@@ -225,7 +228,9 @@ export default function Dashboard() {
 
       <main className="px-4 py-4 space-y-5">
         <section>
-          {isLeaderboard && currentWeek ? (
+          {isSolo ? (
+            <AccountabilityShareCard leagueId={leagueDetails.id} />
+          ) : isLeaderboard && currentWeek ? (
             <LeaderboardRaceCard
               members={leagueDetails.members}
               currentUserId={user?.id}
@@ -373,9 +378,32 @@ export default function Dashboard() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">Season Snapshot</h2>
-            <button onClick={() => navigate('/league')} className="text-xs text-primary font-medium">Standings</button>
+            <button onClick={() => navigate('/league')} className="text-xs text-primary font-medium">{isSolo ? 'Progress' : 'Standings'}</button>
           </div>
-          {isLeaderboard ? (
+          {isSolo ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="card-elevated rounded-xl p-4">
+                <Target className="w-4 h-4 text-primary mb-2" />
+                <p className="score-text text-2xl">{completedCount}/{transformedTasks.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">Goals hit today</p>
+              </div>
+              <div className="card-elevated rounded-xl p-4">
+                <Zap className="w-4 h-4 text-secondary mb-2" />
+                <p className="score-text text-2xl">{(currentMember?.weekly_points ?? 0).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">Week points</p>
+              </div>
+              <div className="card-elevated rounded-xl p-4">
+                <CalendarDays className="w-4 h-4 text-muted-foreground mb-2" />
+                <p className="score-text text-2xl">{currentWeek?.week_number ?? 1}</p>
+                <p className="text-xs text-muted-foreground mt-1">Tracking week</p>
+              </div>
+              <div className="card-elevated rounded-xl p-4">
+                <Trophy className="w-4 h-4 text-pending mb-2" />
+                <p className="score-text text-2xl">{(currentMember?.total_points ?? 0).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">Season points</p>
+              </div>
+            </div>
+          ) : isLeaderboard ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="card-elevated rounded-xl p-4">
                 <Trophy className="w-4 h-4 text-pending mb-2" />
@@ -403,7 +431,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        {!isLeaderboard && displayMatchup && scheduledMatchup?.status === 'in_progress' && currentWeek && (
+        {isHeadToHead && displayMatchup && scheduledMatchup?.status === 'in_progress' && currentWeek && (
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

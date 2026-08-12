@@ -6,7 +6,7 @@ import type { Tables } from '@/integrations/supabase/types';
 export type League = Tables<'leagues'>;
 export type LeagueMember = Tables<'league_members'>;
 export type Season = Tables<'seasons'>;
-export type LeagueGameFormat = 'head_to_head' | 'leaderboard';
+export type LeagueGameFormat = 'head_to_head' | 'leaderboard' | 'solo';
 
 export function useUserLeagues() {
   const { user } = useAuth();

@@ -28,9 +28,11 @@ export function useStartSeason() {
     onSuccess: ({ gameFormat }) => {
       toast({
         title: 'Season Scheduled!',
-        description: gameFormat === 'leaderboard'
-          ? 'The leaderboard opens Sunday. Everyone starts the week at zero.'
-          : 'The head-to-head schedule is set. Week 1 kicks off Sunday.',
+        description: gameFormat === 'solo'
+          ? 'Your Solo scorecard is live now. Start scoring today.'
+          : gameFormat === 'leaderboard'
+            ? 'The leaderboard opens Sunday. Everyone starts the week at zero.'
+            : 'The head-to-head schedule is set. Week 1 kicks off Sunday.',
       });
       queryClient.invalidateQueries({ queryKey: ['league-details'] });
       queryClient.invalidateQueries({ queryKey: ['tasks-with-checkins'] });
