@@ -1,9 +1,9 @@
 import { Check, Target } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { TaskTemplate } from '@/hooks/useTaskTemplates';
-import { TaskConfigOverrides } from './TaskConfigurationPanel';
-import { getConfiguredTaskName } from '@/lib/taskNaming';
+import type { TaskTemplate } from '@/hooks/useTaskTemplates';
+import type { TaskConfigOverrides } from './TaskConfigurationPanel';
+import { getConfiguredTaskName, getTaskScoringSentence } from '@/lib/taskNaming';
 
 interface TaskSummaryPreviewProps {
   templates: TaskTemplate[];
@@ -13,15 +13,18 @@ interface TaskSummaryPreviewProps {
 export function TaskSummaryPreview({ templates, configs }: TaskSummaryPreviewProps) {
   if (configs.size === 0) return null;
 
-  const selectedTemplates = templates.filter(t => configs.has(t.id));
+  const selectedTemplates = templates.filter((template) => configs.has(template.id));
 
   return (
-    <Card className="border-primary/20 bg-primary/5">
+    <Card className="border-primary/20 bg-primary/5 overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
-          <Check className="w-4 h-4 text-primary" />
-          Task Summary ({configs.size} selected)
+          <Target className="w-4 h-4 text-primary" />
+          The Daily Scorecard
         </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          This is what every player is competing to score each day.
+        </p>
       </CardHeader>
       <CardContent className="space-y-2">
         {selectedTemplates.map((template) => {
@@ -29,32 +32,34 @@ export function TaskSummaryPreview({ templates, configs }: TaskSummaryPreviewPro
           if (!config) return null;
 
           const displayName = getConfiguredTaskName(template, config);
-          const isBinary = config.scoring_mode === 'binary';
+          const isGoalScoring = config.scoring_mode === 'binary';
 
           return (
-            <div
-              key={template.id}
-              className="flex items-center justify-between py-2 px-3 rounded-lg bg-background/50 border border-border/50"
-            >
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                <span className="text-sm font-medium truncate">{displayName}</span>
+            <div key={template.id} className="py-3 px-3 rounded-xl bg-background/60 border border-border/50">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="w-6 h-6 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                    <Check className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-sm font-semibold truncate">{displayName}</span>
+                </div>
+                <Badge variant="outline" className="text-[10px] shrink-0">
+                  {isGoalScoring ? 'Goal' : 'Performance'}
+                </Badge>
               </div>
-
-              <Badge variant="outline" className="text-xs shrink-0">
-                {isBinary ? (
-                  <><Check className="w-3 h-3 mr-1" />Yes/No</>
-                ) : (
-                  <><Target className="w-3 h-3 mr-1" />Detailed</>
-                )}
-              </Badge>
+              <p className="text-xs text-muted-foreground mt-2 pl-8">
+                {getTaskScoringSentence(template, config)}
+              </p>
             </div>
           );
         })}
 
-        <p className="pt-2 mt-2 border-t border-border/50 text-xs text-muted-foreground">
-          Points are calculated from each task’s configured scoring rule, not a flat per-task value.
-        </p>
+        <div className="pt-3 mt-2 border-t border-border/50 flex items-start gap-2">
+          <Target className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            Matchups are won by the weekly point total. Goal scoring keeps tasks equally weighted; Performance scoring lets extra effort add more.
+          </p>
+        </div>
       </CardContent>
     </Card>
   );
