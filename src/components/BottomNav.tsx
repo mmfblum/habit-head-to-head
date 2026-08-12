@@ -1,9 +1,10 @@
 import { Home, Target, Trophy, Swords, MessageSquare } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 
-const navItems = [
+const baseNavItems = [
   { icon: Home, label: 'Home', path: '/' },
-  { icon: Swords, label: 'Matchup', path: '/matchup' },
+  { icon: Swords, label: 'Matchup', path: '/matchup', headToHeadOnly: true },
   { icon: Target, label: 'Tasks', path: '/tasks' },
   { icon: Trophy, label: 'League', path: '/league' },
   { icon: MessageSquare, label: 'Feed', path: '/feed' },
@@ -12,6 +13,9 @@ const navItems = [
 export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { data: league } = useUserPrimaryLeague();
+  const isLeaderboard = league?.game_format === 'leaderboard';
+  const navItems = baseNavItems.filter((item) => !item.headToHeadOnly || !isLeaderboard);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border safe-bottom">
