@@ -11,6 +11,7 @@ export interface LeagueMemberWithProfile {
   display_name: string | null;
   avatar_url: string | null;
   total_points: number;
+  championship_points: number;
   wins: number;
   losses: number;
   ties: number;
@@ -67,7 +68,6 @@ export function useLeagueDetails(leagueId?: string) {
         .select('*')
         .eq('id', leagueId)
         .single();
-
       if (leagueError) throw leagueError;
       if (!league) return null;
 
@@ -81,7 +81,6 @@ export function useLeagueDetails(leagueId?: string) {
         .in('status', ['active', 'draft'])
         .order('season_number', { ascending: false })
         .limit(1);
-
       if (seasonsError) throw seasonsError;
       const currentSeason = seasons?.[0] || null;
 
@@ -95,7 +94,6 @@ export function useLeagueDetails(leagueId?: string) {
           .lte('start_date', today)
           .gte('end_date', today)
           .limit(1);
-
         if (weeksError) throw weeksError;
         currentWeek = weeks?.[0] || null;
 
@@ -107,7 +105,6 @@ export function useLeagueDetails(leagueId?: string) {
             .gt('start_date', today)
             .order('week_number', { ascending: true })
             .limit(1);
-
           if (upcomingError) throw upcomingError;
           currentWeek = upcomingWeeks?.[0] || null;
 
@@ -119,7 +116,6 @@ export function useLeagueDetails(leagueId?: string) {
               .lt('end_date', today)
               .order('week_number', { ascending: false })
               .limit(1);
-
             if (latestError) throw latestError;
             currentWeek = latestWeek?.[0] || null;
           }
@@ -128,21 +124,13 @@ export function useLeagueDetails(leagueId?: string) {
 
       const { data: members, error: membersError } = await supabase
         .from('league_members')
-        .select(`
-          id,
-          user_id,
-          role,
-          profiles (
-            display_name,
-            avatar_url
-          )
-        `)
+        .select(`id,user_id,role,profiles(display_name,avatar_url)`)
         .eq('league_id', leagueId);
-
       if (membersError) throw membersError;
 
       const standingsMap = new Map<string, {
         total_points: number;
+        championship_points: number;
         wins: number;
         losses: number;
         ties: number;
@@ -156,11 +144,12 @@ export function useLeagueDetails(leagueId?: string) {
           .from('season_standings')
           .select('*')
           .eq('season_id', currentSeason.id);
-
         if (standingsError) throw standingsError;
         standings?.forEach((standing) => {
+          const extended = standing as typeof standing & { championship_points?: number };
           standingsMap.set(standing.user_id, {
-            total_points: standing.total_points,
+            total_points: Number(standing.total_points),
+            championship_points: Number(extended.championship_points ?? 0),
             wins: standing.wins,
             losses: standing.losses,
             ties: standing.ties,
@@ -177,11 +166,8 @@ export function useLeagueDetails(leagueId?: string) {
           .from('weekly_scores')
           .select('user_id, total_points')
           .eq('week_id', currentWeek.id);
-
         if (scoresError) throw scoresError;
-        weeklyScores?.forEach((weeklyScore) => {
-          weeklyScoresMap.set(weeklyScore.user_id, weeklyScore.total_points);
-        });
+        weeklyScores?.forEach((weeklyScore) => weeklyScoresMap.set(weeklyScore.user_id, Number(weeklyScore.total_points)));
       }
 
       const membersWithDetails: LeagueMemberWithProfile[] = (members || []).map((member) => {
@@ -194,6 +180,7 @@ export function useLeagueDetails(leagueId?: string) {
           display_name: profile?.display_name || 'Unknown',
           avatar_url: profile?.avatar_url || null,
           total_points: standing?.total_points || 0,
+          championship_points: standing?.championship_points || 0,
           wins: standing?.wins || 0,
           losses: standing?.losses || 0,
           ties: standing?.ties || 0,
@@ -205,13 +192,12 @@ export function useLeagueDetails(leagueId?: string) {
       });
 
       if (gameFormat === 'leaderboard') {
-        membersWithDetails.sort((a, b) => b.total_points - a.total_points);
+        membersWithDetails.sort((a, b) =>
+          b.championship_points - a.championship_points || b.total_points - a.total_points
+        );
       } else {
         membersWithDetails.sort((a, b) =>
-          b.wins - a.wins ||
-          b.ties - a.ties ||
-          b.total_points - a.total_points ||
-          a.losses - b.losses
+          b.wins - a.wins || b.ties - a.ties || b.total_points - a.total_points || a.losses - b.losses
         );
       }
 
@@ -254,7 +240,6 @@ export function useLeagueDetails(leagueId?: string) {
 
 export function useUserPrimaryLeague() {
   const { user } = useAuth();
-
   const { data: memberships, isLoading: membershipsLoading } = useQuery({
     queryKey: ['user-league-memberships', user?.id],
     queryFn: async () => {
@@ -269,13 +254,7 @@ export function useUserPrimaryLeague() {
     },
     enabled: !!user,
   });
-
   const primaryLeagueId = memberships?.[0]?.league_id;
   const leagueDetails = useLeagueDetails(primaryLeagueId);
-
-  return {
-    ...leagueDetails,
-    isLoading: membershipsLoading || leagueDetails.isLoading,
-    leagueId: primaryLeagueId,
-  };
+  return { ...leagueDetails, isLoading: membershipsLoading || leagueDetails.isLoading, leagueId: primaryLeagueId };
 }
