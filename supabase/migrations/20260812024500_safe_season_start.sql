@@ -1,9 +1,9 @@
 -- =============================================================================
 -- SAFE SEASON KICKOFF
 -- =============================================================================
--- Draft seasons may sit in preseason while friends join. Starting a season must
--- therefore rebase Week 1 to the actual kickoff date instead of the date the
--- league was originally created.
+-- Draft seasons may sit in preseason while friends join. Starting a season
+-- schedules Week 1 for the upcoming Sunday (Sunday-to-Saturday fantasy weeks)
+-- in the commissioner's profile timezone.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.start_league_season(_season_id UUID)
@@ -16,10 +16,14 @@ DECLARE
     season_rec RECORD;
     member_count INT;
     task_count INT;
+    league_timezone TEXT := 'America/New_York';
+    local_today DATE;
+    kickoff_date DATE;
 BEGIN
-    SELECT s.*
+    SELECT s.*, l.created_by
     INTO season_rec
     FROM public.seasons s
+    JOIN public.leagues l ON l.id = s.league_id
     WHERE s.id = _season_id;
 
     IF NOT FOUND THEN
@@ -37,6 +41,18 @@ BEGIN
     IF season_rec.status <> 'draft' THEN
         RAISE EXCEPTION 'Only a draft season can be started';
     END IF;
+
+    SELECT COALESCE(p.timezone, 'America/New_York')
+    INTO league_timezone
+    FROM public.profiles p
+    WHERE p.id = season_rec.created_by;
+
+    league_timezone := COALESCE(league_timezone, 'America/New_York');
+    local_today := (now() AT TIME ZONE league_timezone)::DATE;
+
+    -- PostgreSQL DOW: Sunday=0. If kickoff is pressed on Sunday, Week 1 starts
+    -- immediately; otherwise it begins on the next Sunday.
+    kickoff_date := local_today + ((7 - EXTRACT(DOW FROM local_today)::INT) % 7);
 
     SELECT COUNT(*)
     INTO member_count
@@ -57,22 +73,21 @@ BEGIN
         RAISE EXCEPTION 'Configure at least three scoring tasks before starting the season';
     END IF;
 
-    -- Rebase every generated week to kickoff day while preserving week numbers.
     UPDATE public.weeks w
-    SET start_date = CURRENT_DATE + ((w.week_number - 1) * 7),
-        end_date = CURRENT_DATE + ((w.week_number - 1) * 7) + 6,
+    SET start_date = kickoff_date + ((w.week_number - 1) * 7),
+        end_date = kickoff_date + ((w.week_number - 1) * 7) + 6,
         is_locked = FALSE
     WHERE w.season_id = _season_id;
 
     UPDATE public.seasons s
-    SET start_date = CURRENT_DATE,
-        end_date = CURRENT_DATE + (s.weeks_count * 7) - 1,
+    SET start_date = kickoff_date,
+        end_date = kickoff_date + (s.weeks_count * 7) - 1,
         status = 'active',
         updated_at = now()
     WHERE s.id = _season_id;
 
-    -- on_season_activated() now runs after the update and creates standings,
-    -- task instances, and the round-robin schedule against the rebased weeks.
+    -- on_season_activated() runs after the update and creates standings, task
+    -- instances, and the round-robin schedule against these rebased weeks.
 END;
 $$;
 
@@ -80,4 +95,4 @@ REVOKE ALL ON FUNCTION public.start_league_season(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.start_league_season(UUID) TO authenticated;
 
 COMMENT ON FUNCTION public.start_league_season IS
-'Validates and starts a draft Zrizin season, rebasing Week 1 to the actual kickoff date before schedule generation.';
+'Validates a draft Zrizin season and schedules Week 1 for the upcoming Sunday in the commissioner timezone before round-robin schedule generation.';
