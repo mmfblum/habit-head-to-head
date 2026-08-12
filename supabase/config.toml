@@ -1,1 +1,4 @@
 project_id = "urblnmjdgjuzhnfnhftb"
+
+[functions.push-dispatch]
+verify_jwt = false
