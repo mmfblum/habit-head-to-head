@@ -10,9 +10,15 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "native:sync": "npm run build && npx cap sync",
+    "native:android": "npm run native:sync && npx cap open android",
+    "native:ios": "npm run native:sync && npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "8.4.2",
+    "@capacitor/core": "8.4.2",
+    "@capacitor/ios": "8.4.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -43,6 +49,7 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@supabase/supabase-js": "^2.90.1",
     "@tanstack/react-query": "^5.83.0",
+    "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -63,10 +70,10 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
-    "zod": "^3.25.76",
-    "canvas-confetti": "^1.9.3"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.4.2",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
@@ -89,5 +96,5 @@
     "vite": "^5.4.19",
     "vitest": "^3.2.4"
   },
-  "description": "Zrizin \u2014 fantasy-style head-to-head productivity leagues"
+  "description": "Zrizin — fantasy-style head-to-head productivity leagues"
 }
