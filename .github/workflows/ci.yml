@@ -94,13 +94,14 @@ jobs:
         run: npm audit --audit-level=high
 
   android:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha }}
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -131,13 +132,14 @@ jobs:
           ./gradlew assembleDebug --no-daemon
 
   ios:
-    if: github.event_name == 'pull_request'
     runs-on: macos-latest
     timeout-minutes: 25
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha }}
 
       - name: Use Node.js
         uses: actions/setup-node@v4
