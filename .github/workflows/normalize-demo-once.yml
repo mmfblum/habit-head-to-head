@@ -1,0 +1,38 @@
+name: One-shot demo typing cleanup
+
+on:
+  push:
+    branches:
+      - 'agent/competitive-loop-foundation'
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Normalize the final legacy explicit-any cast
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/pages/CheckinDemo.tsx')
+          text = path.read_text()
+          text = text.replace("config: timerConfig as any", "config: timerConfig as TaskWithTemplate['config']")
+          path.write_text(text)
+          PY
+
+      - name: Commit cleanup and remove this one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/normalize-demo-once.yml
+          git add src/pages/CheckinDemo.tsx
+          if ! git diff --cached --quiet; then
+            git commit -m "Type check-in demo config"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
