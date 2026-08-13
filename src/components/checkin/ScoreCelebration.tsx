@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Zap } from 'lucide-react';
+import { triggerConfetti, triggerScoreHaptic } from '@/lib/confetti';
 
 interface ScoreCelebrationProps {
   points: number;
@@ -12,9 +13,19 @@ interface ScoreCelebrationProps {
 
 export function ScoreCelebration({ points, taskName, powerPlay, isUpdate, onDone }: ScoreCelebrationProps) {
   useEffect(() => {
-    if ('vibrate' in navigator) navigator.vibrate(powerPlay ? [35, 25, 75] : [35, 20, 45]);
-    const timeout = window.setTimeout(onDone, 1750);
-    return () => window.clearTimeout(timeout);
+    triggerScoreHaptic(Boolean(powerPlay));
+
+    // The first firework is launched by the successful scoring action. A Power
+    // Play gets a second, clearly separated explosion and a second haptic hit.
+    const secondBurst = powerPlay
+      ? window.setTimeout(() => triggerConfetti(false), 240)
+      : undefined;
+    const timeout = window.setTimeout(onDone, powerPlay ? 1950 : 1750);
+
+    return () => {
+      window.clearTimeout(timeout);
+      if (secondBurst !== undefined) window.clearTimeout(secondBurst);
+    };
   }, [onDone, powerPlay]);
 
   return (
@@ -40,7 +51,7 @@ export function ScoreCelebration({ points, taskName, powerPlay, isUpdate, onDone
         <div className="relative">
           <motion.div
             initial={{ rotate: -20, scale: 0 }}
-            animate={{ rotate: 0, scale: 1 }}
+            animate={powerPlay ? { rotate: [0, -8, 8, 0], scale: [0, 1.2, 1] } : { rotate: 0, scale: 1 }}
             transition={{ delay: 0.08, type: 'spring' }}
             className="w-12 h-12 rounded-2xl bg-primary/20 text-primary flex items-center justify-center mx-auto mb-3"
           >
@@ -60,7 +71,7 @@ export function ScoreCelebration({ points, taskName, powerPlay, isUpdate, onDone
           </motion.p>
           <p className="font-display font-bold text-lg mt-2 truncate">{taskName}</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {powerPlay ? '2× points just hit your matchup.' : 'Points added to your matchup.'}
+            {powerPlay ? '2× points. Double explosion.' : 'Points added to your matchup.'}
           </p>
         </div>
       </motion.div>
