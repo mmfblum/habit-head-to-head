@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(11);
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('55555555-5555-4555-8555-555555555555', 'multi-league-owner@zrizin.local', '{}'::jsonb),
