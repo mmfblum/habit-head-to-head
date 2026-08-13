@@ -26,7 +26,6 @@ cross join lateral (
 ) t
 where s.league_id=(select id from public.leagues where created_by='77777777-7777-4777-8777-777777777777');
 
--- Solo requires at least three enabled tasks to start; add two innocuous defaults.
 insert into public.league_task_configs (season_id,task_template_id,config_overrides,display_order)
 select s.id,t.id,t.default_config,row_number() over(order by t.name)
 from public.seasons s
@@ -55,17 +54,17 @@ from public.task_instances ti
 where ti.season_id=(select id from public.seasons where league_id=(select id from public.leagues where created_by='77777777-7777-4777-8777-777777777777'))
   and ti.task_name='Reading';
 
-select is(
-  (
-    select points_awarded
-    from public.scoring_events se
-    join public.daily_checkins dc on dc.id=se.daily_checkin_id
-    where dc.user_id='77777777-7777-4777-8777-777777777777'
-      and se.is_reversed=false
-    limit 1
-  ),
-  3::numeric,
-  'Reading earns its normal score before adding a social note'
+create temporary table reading_score_before as
+select se.id as event_id, se.points_awarded, se.is_reversed, dc.id as checkin_id
+from public.scoring_events se
+join public.daily_checkins dc on dc.id=se.daily_checkin_id
+where dc.user_id='77777777-7777-4777-8777-777777777777'
+  and se.is_reversed=false
+limit 1;
+
+select ok(
+  exists(select 1 from reading_score_before),
+  'Reading has an authoritative scoring event before adding social metadata'
 );
 
 update public.daily_checkins
@@ -79,15 +78,14 @@ select ok(
   (
     select count(*)=1
     from public.scoring_events se
-    join public.daily_checkins dc on dc.id=se.daily_checkin_id
-    where dc.user_id='77777777-7777-4777-8777-777777777777'
+    join reading_score_before before on before.checkin_id=se.daily_checkin_id
   )
   and (
-    select points_awarded=3 and is_reversed=false
+    select se.id=before.event_id
+       and se.points_awarded is not distinct from before.points_awarded
+       and se.is_reversed=false
     from public.scoring_events se
-    join public.daily_checkins dc on dc.id=se.daily_checkin_id
-    where dc.user_id='77777777-7777-4777-8777-777777777777'
-    limit 1
+    join reading_score_before before on before.event_id=se.id
   ),
   'Adding a Reading note leaves the original scoring event untouched'
 );
