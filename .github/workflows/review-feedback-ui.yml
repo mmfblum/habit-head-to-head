@@ -27,7 +27,12 @@ jobs:
           cache: npm
 
       - name: Apply product patch
-        run: python3 scripts/apply_review_feedback_ui.py
+        run: |
+          # Some generated source files intentionally omit a trailing newline.
+          # The one-time patch uses exact multiline replacements, so normalize
+          # this source before applying it.
+          printf '\n' >> src/hooks/useLeagues.ts
+          python3 scripts/apply_review_feedback_ui.py
 
       - name: Install dependencies
         run: npm ci
