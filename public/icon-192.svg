@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="40" fill="#0a0f1a"/>
-  <text x="96" y="120" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="72" fill="#6ee7b7">Z</text>
+  <rect width="192" height="192" rx="42" fill="#07110D"/>
+  <path fill="#22C55E" d="M45 47h102l-15 22-43 54h57v23H44l15-23 43-54H45z"/>
+  <path fill="#22D3EE" d="M108 69h25l-44 54H64z"/>
 </svg>
