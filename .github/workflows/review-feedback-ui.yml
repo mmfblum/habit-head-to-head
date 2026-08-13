@@ -28,11 +28,18 @@ jobs:
 
       - name: Apply product patch
         run: |
-          # Some generated source files intentionally omit a trailing newline.
-          # The one-time patch uses exact multiline replacements, so normalize
-          # this source before applying it.
           printf '\n' >> src/hooks/useLeagues.ts
           python3 scripts/apply_review_feedback_ui.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/League.tsx')
+          text = p.read_text()
+          bad = '''    </div>\n       {showCreateLeague && <CreateLeagueWizard onClose={() => setShowCreateLeague(false)} />}\n    </div>\n  );\n}\n'''
+          good = '''      {showCreateLeague && <CreateLeagueWizard onClose={() => setShowCreateLeague(false)} />}\n    </div>\n  );\n}\n'''
+          if bad not in text:
+              raise SystemExit('Expected League.tsx placement pattern not found')
+          p.write_text(text.replace(bad, good, 1))
+          PY
 
       - name: Install dependencies
         run: npm ci
