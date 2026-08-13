@@ -1,86 +1,46 @@
 import { useState, useEffect } from 'react';
-import { Clock } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { ClockTimePicker } from '@/components/ui/clock-time-picker';
 
 interface TimeCheckinInputProps {
-  value: string; // HH:MM format
+  value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
   label?: string;
   targetTime?: string;
-  isBefore?: boolean; // true = need to be before target, false = need to be after
+  isBefore?: boolean;
 }
 
-export function TimeCheckinInput({
-  value,
-  onChange,
-  disabled = false,
-  label = 'Time',
-  targetTime,
-  isBefore = true,
-}: TimeCheckinInputProps) {
+function friendlyTime(value: string) {
+  const [hourText, minute = '00'] = value.split(':');
+  const hour24 = Number(hourText);
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour = hour24 % 12 || 12;
+  return `${hour}:${minute} ${period}`;
+}
+
+export function TimeCheckinInput({ value, onChange, disabled = false, label = 'Time', targetTime, isBefore = true }: TimeCheckinInputProps) {
   const [localValue, setLocalValue] = useState(value || '');
+  useEffect(() => setLocalValue(value || ''), [value]);
 
-  useEffect(() => {
-    setLocalValue(value || '');
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setLocalValue(newValue);
-    onChange(newValue);
-  };
-
-  // Determine if the current value meets the target
   const meetsTarget = (): boolean | null => {
     if (!value || !targetTime) return null;
-    
     const [valueHours, valueMinutes] = value.split(':').map(Number);
     const [targetHours, targetMinutes] = targetTime.split(':').map(Number);
-    
     const valueTotal = valueHours * 60 + valueMinutes;
     const targetTotal = targetHours * 60 + targetMinutes;
-    
     return isBefore ? valueTotal <= targetTotal : valueTotal >= targetTotal;
   };
-
   const targetMet = meetsTarget();
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <span className="text-sm text-muted-foreground">{label}</span>
-        {targetTime && (
-          <span className="text-xs text-muted-foreground">
-            Target: {isBefore ? 'before' : 'after'} {targetTime}
-          </span>
-        )}
+        {targetTime && <span className="text-xs text-muted-foreground">Target: {isBefore ? 'by' : 'after'} {friendlyTime(targetTime)}</span>}
       </div>
-      
-      <div className="relative">
-        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          type="time"
-          value={localValue}
-          onChange={handleChange}
-          disabled={disabled}
-          className={cn(
-            'pl-10 text-lg font-semibold',
-            targetMet === true && 'border-primary ring-1 ring-primary/20',
-            targetMet === false && 'border-loss ring-1 ring-loss/20'
-          )}
-        />
-      </div>
-
-      {targetMet !== null && (
-        <div className={cn(
-          'text-xs font-medium',
-          targetMet ? 'text-primary' : 'text-loss'
-        )}>
-          {targetMet ? '✓ Target met!' : '✗ Target not met'}
-        </div>
-      )}
+      <ClockTimePicker value={localValue} onChange={(next) => { setLocalValue(next); onChange(next); }} disabled={disabled} className={cn(targetMet === true && 'border-primary ring-1 ring-primary/20', targetMet === false && 'border-loss ring-1 ring-loss/20')} />
+      {targetMet !== null && <div className={cn('text-xs font-medium', targetMet ? 'text-primary' : 'text-loss')}>{targetMet ? '✓ Target met!' : '✗ Target not met'}</div>}
     </div>
   );
 }

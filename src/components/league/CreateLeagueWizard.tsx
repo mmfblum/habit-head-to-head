@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Copy, Gamepad2, ListOrdered, Share2, Swords, Trophy, UserRound, Users, Zap } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Gamepad2, ListOrdered, Settings2, Share2, Swords, Trophy, UserRound, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -123,6 +123,16 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       toast.error('Please enter a league name');
       return;
     }
+    if (tasksLoading) {
+      toast.info('Loading the Zrizin scorecard…');
+      return;
+    }
+
+    const classic = buildStarterPack('classic');
+    if (classic.size < 3) {
+      toast.error('The default scorecard is not available yet.');
+      return;
+    }
 
     try {
       const league = await createLeague.mutateAsync({
@@ -138,10 +148,30 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
         startDate: new Date(),
       });
 
+      const taskConfigArray = Array.from(classic.entries()).map(([taskId, config], index) => ({
+        task_template_id: taskId,
+        display_order: index,
+        config_overrides: serializeConfig(config),
+      }));
+      await configureTasks.mutateAsync({ seasonId: season.id, taskConfigs: taskConfigArray });
+
       setCreatedLeague(league);
       setCreatedSeason(season);
-      setStep('tasks');
-    } catch {
+      setTaskConfigs(classic);
+      setDefaultPackLoaded(true);
+
+      if (formData.gameFormat === 'solo') {
+        await startSeason.mutateAsync({ seasonId: season.id, gameFormat: 'solo' });
+        toast.success('Solo is live with the Classic Zrizin scorecard.');
+        onClose();
+        navigate('/tasks');
+        return;
+      }
+
+      setStep('invite');
+      toast.success('League created. Classic Zrizin is already set up.');
+    } catch (error) {
+      console.error(error);
       toast.error('Failed to create league');
     }
   };
@@ -258,15 +288,22 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const isLeaderboard = formData.gameFormat === 'leaderboard';
   const isSolo = formData.gameFormat === 'solo';
   const steps = isSolo
-    ? [
-        { id: 'details', label: 'Solo', icon: UserRound },
-        { id: 'tasks', label: 'Goals', icon: Gamepad2 },
-      ]
-    : [
-        { id: 'details', label: 'League', icon: Trophy },
-        { id: 'tasks', label: 'Game', icon: Gamepad2 },
-        { id: 'invite', label: 'Friends', icon: Users },
-      ];
+    ? step === 'tasks'
+      ? [
+          { id: 'details', label: 'Solo', icon: UserRound },
+          { id: 'tasks', label: 'Goals', icon: Gamepad2 },
+        ]
+      : [{ id: 'details', label: 'Solo', icon: UserRound }]
+    : step === 'tasks'
+      ? [
+          { id: 'details', label: 'League', icon: Trophy },
+          { id: 'tasks', label: 'Game', icon: Gamepad2 },
+          { id: 'invite', label: 'Friends', icon: Users },
+        ]
+      : [
+          { id: 'details', label: 'League', icon: Trophy },
+          { id: 'invite', label: 'Friends', icon: Users },
+        ];
   const currentStepIndex = steps.findIndex((item) => item.id === step);
 
   return (
@@ -403,8 +440,8 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
 
-                <Button onClick={handleDetailsSubmit} className="w-full" size="lg" disabled={createLeague.isPending || createSeason.isPending}>
-                  {createLeague.isPending || createSeason.isPending ? 'Creating...' : 'Build the Daily Game'}
+                <Button onClick={handleDetailsSubmit} className="w-full" size="lg" disabled={createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending || tasksLoading}>
+                  {createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending ? 'Creating...' : 'Create League'}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </motion.div>
@@ -524,6 +561,14 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                       ? 'Once at least one other player joins, schedule the season. Preseason practice opens immediately and the official leaderboard resets to zero Sunday.'
                       : 'Once at least one opponent joins, schedule Week 1. Everyone can practice immediately; the real matchup starts Sunday and runs through Saturday.'}
                   </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <Button type="button" variant="outline" onClick={() => setStep('tasks')}>
+                    <Settings2 className="w-4 h-4 mr-2" />
+                    Customize Scorecard
+                  </Button>
+                  <p className="text-xs text-center text-muted-foreground">Optional — Classic Zrizin is already installed and ready.</p>
                 </div>
 
                 <Button onClick={finishSetup} className="w-full" size="lg">

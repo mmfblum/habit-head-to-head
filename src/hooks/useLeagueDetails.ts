@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getLocalISODate } from '@/lib/date';
 import { useAuth } from './useAuth';
@@ -238,23 +238,67 @@ export function useLeagueDetails(leagueId?: string) {
   });
 }
 
+export interface UserLeagueMembership {
+  league_id: string;
+  leagues: {
+    id: string;
+    name: string;
+    game_format?: LeagueGameFormat | null;
+  } | null;
+}
+
 export function useUserPrimaryLeague() {
   const { user } = useAuth();
-  const { data: memberships, isLoading: membershipsLoading } = useQuery({
-    queryKey: ['user-league-memberships', user?.id],
+  const queryClient = useQueryClient();
+  const selectionKey = ['selected-league', user?.id] as const;
+
+  const { data: selectedPreference } = useQuery({
+    queryKey: selectionKey,
     queryFn: async () => {
+      if (!user) return undefined;
+      return localStorage.getItem(`zrizin:selected-league:${user.id}`) || undefined;
+    },
+    enabled: !!user,
+    staleTime: Infinity,
+  });
+
+  const { data: memberships = [], isLoading: membershipsLoading } = useQuery({
+    queryKey: ['user-league-memberships', user?.id],
+    queryFn: async (): Promise<UserLeagueMembership[]> => {
       if (!user) return [];
       const { data, error } = await supabase
         .from('league_members')
-        .select('league_id')
+        .select('league_id,joined_at,leagues(id,name,game_format)')
         .eq('user_id', user.id)
-        .limit(1);
+        .order('joined_at', { ascending: false });
       if (error) throw error;
-      return data;
+      return (data || []) as unknown as UserLeagueMembership[];
     },
     enabled: !!user,
   });
-  const primaryLeagueId = memberships?.[0]?.league_id;
-  const leagueDetails = useLeagueDetails(primaryLeagueId);
-  return { ...leagueDetails, isLoading: membershipsLoading || leagueDetails.isLoading, leagueId: primaryLeagueId };
+
+  const preferredIsValid = !!selectedPreference
+    && memberships.some((membership) => membership.league_id === selectedPreference);
+  const selectedLeagueId = preferredIsValid
+    ? selectedPreference
+    : memberships[0]?.league_id;
+
+  const leagueDetails = useLeagueDetails(selectedLeagueId);
+
+  const selectLeague = (leagueId: string) => {
+    if (!user?.id || !memberships.some((membership) => membership.league_id === leagueId)) return;
+    localStorage.setItem(`zrizin:selected-league:${user.id}`, leagueId);
+    queryClient.setQueryData(selectionKey, leagueId);
+    queryClient.invalidateQueries({ queryKey: ['league-details'] });
+    queryClient.invalidateQueries({ queryKey: ['current-matchup'] });
+    queryClient.invalidateQueries({ queryKey: ['tasks-with-checkins'] });
+  };
+
+  return {
+    ...leagueDetails,
+    isLoading: membershipsLoading || leagueDetails.isLoading,
+    leagueId: selectedLeagueId,
+    memberships,
+    selectLeague,
+  };
 }

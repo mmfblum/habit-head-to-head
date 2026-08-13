@@ -88,7 +88,7 @@ export function CustomChallengeBuilder({ templates, value, onChange }: CustomCha
           <div className="flex-1">
             <p className="font-semibold">Make it yours</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Add one shared challenge that fits your group—religious study, language practice, no dessert, anything you care about.
+              Create a league-specific task—religious study, language practice, no dessert, anything you care about.
             </p>
             <div className="flex flex-wrap gap-2 mt-3 text-xs text-muted-foreground">
               <span className="rounded-full bg-background px-2 py-1">Religious study</span>
@@ -99,7 +99,7 @@ export function CustomChallengeBuilder({ templates, value, onChange }: CustomCha
         </div>
         <Button type="button" variant="secondary" className="w-full mt-4" onClick={startChallenge} disabled={templates.length === 0}>
           <Sparkles className="w-4 h-4 mr-2" />
-          Add a custom challenge
+          Create a custom task
         </Button>
         {templates.length === 0 && (
           <p className="text-xs text-muted-foreground mt-2 text-center">Custom challenge templates are not installed in this database yet.</p>
@@ -118,7 +118,7 @@ export function CustomChallengeBuilder({ templates, value, onChange }: CustomCha
         <div>
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-secondary" />
-            <p className="font-semibold">League Challenge</p>
+            <p className="font-semibold">Custom Task</p>
           </div>
           <p className="text-xs text-muted-foreground mt-1">Everyone competes on this same custom goal.</p>
         </div>

@@ -1,17 +1,19 @@
 import { motion } from 'framer-motion';
 import { CheckinCard } from './CheckinCard';
+import { ReadingSharePrompt } from './ReadingSharePrompt';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePowerUps } from '@/hooks/usePowerUps';
 import type { TaskWithTemplate } from '@/types/checkin';
 
 interface DailyCheckinListProps {
   tasks: TaskWithTemplate[];
+  date?: Date;
   isLoading: boolean;
   weekId?: string;
   powerPlayEnabled?: boolean;
 }
 
-export function DailyCheckinList({ tasks, isLoading, weekId, powerPlayEnabled = false }: DailyCheckinListProps) {
+export function DailyCheckinList({ tasks, date, isLoading, weekId, powerPlayEnabled = false }: DailyCheckinListProps) {
   const {
     availablePowerups,
     armedPowerups,
@@ -111,6 +113,7 @@ export function DailyCheckinList({ tasks, isLoading, weekId, powerPlayEnabled = 
                       ? () => activatePowerUp.mutate({ powerup: availablePowerPlay, taskInstanceId: task.id })
                       : undefined}
                   />
+                  <ReadingSharePrompt task={task} date={date} />
                 </motion.div>
               );
             })}

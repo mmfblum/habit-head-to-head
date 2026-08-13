@@ -68,7 +68,11 @@ export function useCreateLeague() {
       if (fetchError) throw fetchError;
       return league as typeof league & { game_format: LeagueGameFormat };
     },
-    onSuccess: async () => {
+    onSuccess: async (league) => {
+      if (user?.id) {
+        localStorage.setItem(`zrizin:selected-league:${user.id}`, league.id);
+        queryClient.setQueryData(['selected-league', user.id], league.id);
+      }
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
       await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
@@ -141,6 +145,15 @@ export function useConfigureSeasonTasks() {
         display_order: number;
       }>;
     }) => {
+      // Scorecard configuration is replaceable while the season is being set up.
+      // This lets league creation install Classic Zrizin automatically and still
+      // lets a commissioner customize it before kickoff without duplicate rows.
+      const { error: clearError } = await supabase
+        .from('league_task_configs')
+        .delete()
+        .eq('season_id', seasonId);
+      if (clearError) throw clearError;
+
       const configsToInsert = taskConfigs.map((config) => ({
         season_id: seasonId,
         task_template_id: config.task_template_id,
@@ -188,7 +201,11 @@ export function useJoinLeague() {
       if (leagueError) throw leagueError;
       return league;
     },
-    onSuccess: async () => {
+    onSuccess: async (league) => {
+      if (user?.id) {
+        localStorage.setItem(`zrizin:selected-league:${user.id}`, league.id);
+        queryClient.setQueryData(['selected-league', user.id], league.id);
+      }
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
       await queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
       await queryClient.invalidateQueries({ queryKey: ['league-details'] });

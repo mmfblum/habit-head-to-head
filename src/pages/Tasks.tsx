@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, Calendar, Eye, Flag, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Eye, Flag, ListFilter, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DailyCheckinList } from '@/components/checkin';
 import { FinishMyCard, countFinishableTasks } from '@/components/checkin/FinishMyCard';
@@ -36,9 +36,15 @@ export default function Tasks() {
   const activeSeasonId = isWeekLive ? currentSeasonId : undefined;
 
   const { data: tasks = [], isLoading: tasksLoading } = useTasksWithCheckins(activeSeasonId, selectedDate);
-  const completedCount = tasks.filter(isTaskGoalMet).length;
-  const scoringChancesLeft = Math.max(tasks.length - completedCount, 0);
-  const progress = tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
+  const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+  // A skipped optional task stays pending rather than becoming a synthetic
+  // failure. On prior days, unlogged clock/timestamp tasks are the exception:
+  // they represent an actual missed wake/bedtime input and count as unresolved.
+  const countedForProgress = tasks.filter((task) => !!task.todayCheckin || (!isToday && task.input_type === 'time'));
+  const completedCount = countedForProgress.filter(isTaskGoalMet).length;
+  const loggedCount = countedForProgress.length;
+  const scoringChancesLeft = tasks.filter((task) => !task.todayCheckin).length;
+  const progress = loggedCount > 0 ? (completedCount / loggedCount) * 100 : 0;
   const finishableCount = countFinishableTasks(tasks);
 
   const goToPreviousDay = () => setSelectedDate((previous) => {
@@ -52,8 +58,7 @@ export default function Tasks() {
     return next;
   });
 
-  const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-  const categories = ['All', 'Fitness', 'Sleep', 'Learning', 'Mindfulness', 'Productivity', 'Wellness', 'Nutrition', 'Social', 'Custom'];
+  const categories = ['All', ...Array.from(new Set(tasks.map((task) => task.template?.category).filter(Boolean))).map((category) => String(category).replace(/^./, (letter) => letter.toUpperCase()))];
   const filteredTasks = activeCategory && activeCategory !== 'All'
     ? tasks.filter((task) => task.template?.category?.toLowerCase() === activeCategory.toLowerCase())
     : tasks;
@@ -88,7 +93,7 @@ export default function Tasks() {
             <div className="bg-card rounded-xl p-3 border border-border/60">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">{isPreseason ? 'Practice Scorecard' : 'Daily Scorecard'}</span>
-                <span className="text-sm font-semibold">{completedCount}/{tasks.length} goals hit</span>
+                <span className="text-sm font-semibold">{completedCount} hit · {loggedCount} counted</span>
               </div>
               <Progress value={progress} className="h-2" />
               <div className="flex items-center justify-between mt-2">
@@ -127,21 +132,42 @@ export default function Tasks() {
 
         {isWeekLive && (
           <>
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2 -mx-4 px-4">
-              {categories.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setActiveCategory(category === 'All' ? null : category)}
-                  className={cn(
-                    'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-                    (category === 'All' && !activeCategory) || activeCategory === category
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  )}
-                >
-                  {category}
-                </button>
-              ))}
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Today’s tasks</p>
+                <p className="text-xs text-muted-foreground">{filteredTasks.length} shown{activeCategory ? ` · ${activeCategory}` : ''}</p>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 rounded-full">
+                    <ListFilter className="w-4 h-4" />
+                    {activeCategory || 'All tasks'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-3" align="end">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Filter tasks</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {categories.map((category) => {
+                      const selected = (category === 'All' && !activeCategory) || activeCategory === category;
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => setActiveCategory(category === 'All' ? null : category)}
+                          className={cn(
+                            'rounded-xl px-3 py-2 text-sm text-left transition-colors border',
+                            selected
+                              ? 'bg-primary/15 border-primary/30 text-primary font-semibold'
+                              : 'bg-background border-border hover:bg-muted'
+                          )}
+                        >
+                          {category}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             {isToday && <DeviceSyncCard tasks={tasks} date={selectedDate} />}
           </>
@@ -182,6 +208,7 @@ export default function Tasks() {
         ) : isWeekLive ? (
           <DailyCheckinList
             tasks={filteredTasks}
+            date={selectedDate}
             isLoading={tasksLoading || leagueLoading}
             weekId={currentWeek?.id}
             powerPlayEnabled={isHeadToHead && !isPreseason && isToday}

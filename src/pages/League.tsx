@@ -9,6 +9,8 @@ import { useStartSeason } from '@/hooks/useSeasonActions';
 import { useAuth } from '@/hooks/useAuth';
 import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';
 import { Crown, ListOrdered, Trophy, Share2, Settings, Swords, Loader2, Zap, Play, Users, Clock } from 'lucide-react';
+import { CreateLeagueWizard } from '@/components/league/CreateLeagueWizard';
+import { LeagueSwitcher } from '@/components/league/LeagueSwitcher';
 import { toast } from 'sonner';
 import { ManageTasksDialog } from '@/components/league/ManageTasksDialog';
 import { InitialTaskSetupDialog } from '@/components/league/InitialTaskSetupDialog';
@@ -23,10 +25,11 @@ import { LeaderboardConsequenceCard } from '@/components/leaderboard/Leaderboard
 export default function League() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: league, isLoading, error, leagueId } = useUserPrimaryLeague();
+  const { data: league, isLoading, error, leagueId, memberships, selectLeague } = useUserPrimaryLeague();
   const { data: isAdmin } = useIsLeagueAdmin(leagueId);
   const [showManageTasks, setShowManageTasks] = useState(false);
   const [showInitialSetup, setShowInitialSetup] = useState(false);
+  const [showCreateLeague, setShowCreateLeague] = useState(false);
   const startSeason = useStartSeason();
 
   const currentSeasonId = league?.current_season?.id;
@@ -51,11 +54,13 @@ export default function League() {
   if (error || !league) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center">
+        <div className="text-center max-w-sm">
           <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-xl font-display font-bold mb-2">No League Found</h2>
-          <p className="text-muted-foreground">Join or create a league to get started.</p>
+          <h2 className="text-xl font-display font-bold mb-2">No League Selected</h2>
+          <p className="text-muted-foreground mb-5">Create a league or join one with an invite.</p>
+          <Button onClick={() => setShowCreateLeague(true)}>Create League</Button>
         </div>
+        {showCreateLeague && <CreateLeagueWizard onClose={() => setShowCreateLeague(false)} />}
       </div>
     );
   }
@@ -149,7 +154,7 @@ export default function League() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">{headerEyebrow}</p>
-              <h1 className="font-display font-bold text-xl">{league.name}</h1>
+              <LeagueSwitcher currentLeagueId={league.id} currentName={league.name} memberships={memberships} onSelect={selectLeague} onCreate={() => setShowCreateLeague(true)} />
             </div>
             <div className="flex items-center gap-2">
               {league.invite_code && (
@@ -460,6 +465,7 @@ export default function League() {
           />
         </>
       )}
+      {showCreateLeague && <CreateLeagueWizard onClose={() => setShowCreateLeague(false)} />}
     </div>
   );
 }
