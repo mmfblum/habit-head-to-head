@@ -18,20 +18,20 @@ insert into public.seasons (league_id,name,season_number,status,start_date,end_d
 select id,'Season 1',1,'draft',(now() at time zone 'America/New_York')::date,(now() at time zone 'America/New_York')::date+55,8
 from public.leagues where created_by='77777777-7777-4777-8777-777777777777';
 
-insert into public.league_task_configs (season_id,task_template_id,display_order)
-select s.id,t.id,0
+insert into public.league_task_configs (season_id,task_template_id,config_overrides,display_order)
+select s.id,t.id,t.default_config,0
 from public.seasons s
 cross join lateral (
-  select id from public.task_templates where name='Reading' limit 1
+  select id,default_config from public.task_templates where name='Reading' limit 1
 ) t
 where s.league_id=(select id from public.leagues where created_by='77777777-7777-4777-8777-777777777777');
 
 -- Solo requires at least three enabled tasks to start; add two innocuous defaults.
-insert into public.league_task_configs (season_id,task_template_id,display_order)
-select s.id,t.id,row_number() over(order by t.name)
+insert into public.league_task_configs (season_id,task_template_id,config_overrides,display_order)
+select s.id,t.id,t.default_config,row_number() over(order by t.name)
 from public.seasons s
 cross join lateral (
-  select id,name from public.task_templates
+  select id,name,default_config from public.task_templates
   where name in ('Healthy Eating','Stretching')
   order by name
 ) t
