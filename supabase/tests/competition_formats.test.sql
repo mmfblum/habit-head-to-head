@@ -56,7 +56,7 @@ select lives_ok(
 reset role;
 
 select ok(
-  (select status='active' and start_date=current_date
+  (select status='active' and start_date=(now() at time zone 'America/New_York')::date
    from public.seasons where league_id=(select id from public.leagues where created_by='11111111-1111-4111-8111-111111111111')),
   'Solo season starts immediately on the local current day'
 );
