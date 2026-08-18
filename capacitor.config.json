@@ -1,0 +1,13 @@
+{
+  "appId": "com.zrizin.app",
+  "appName": "Zrizin",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "banner", "list"]
+    }
+  }
+}

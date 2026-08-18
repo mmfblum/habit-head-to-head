@@ -1,324 +1,294 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Check, Flame, Loader2 } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
+import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AlertCircle, ChevronDown, ChevronUp, Flag, Shield, ShieldCheck, Zap } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useSubmitCheckin } from '@/hooks/useTasksWithCheckins';
+import { TASK_ICONS } from '@/types/checkin';
+import type { CheckinValue, TaskWithTemplate } from '@/types/checkin';
 import { BinaryCheckinInput } from './BinaryCheckinInput';
 import { NumericCheckinInput } from './NumericCheckinInput';
 import { TimeCheckinInput } from './TimeCheckinInput';
 import { DurationCheckinInput } from './DurationCheckinInput';
 import { TimerCheckinInput } from './TimerCheckinInput';
+import { ConfirmationButton } from './ConfirmationButton';
 import { VerificationBadge } from './VerificationBadge';
-import { useSubmitCheckin } from '@/hooks/useTasksWithCheckins';
-import { TASK_ICONS } from '@/types/checkin';
-import type { TaskWithTemplate, CheckinValue } from '@/types/checkin';
-import { cn } from '@/lib/utils';
+import { ScoreCelebration } from './ScoreCelebration';
+import {
+  buildVerifiedMetadata,
+  createTimeCaptureMetadata,
+  getVerificationConfig,
+  getVerificationStatus,
+  isCheckinVerified,
+  validateCheckinValue,
+} from '@/lib/verification';
+import type { VerificationConfig, VerificationMetadata } from '@/lib/verification';
+import { triggerConfetti } from '@/lib/confetti';
+import { getManualGoalCheckinValue } from '@/lib/taskProgress';
 import { useToast } from '@/hooks/use-toast';
-import { getVerificationConfig, type VerificationConfig, type VerificationMetadata } from '@/lib/verification';
 
 interface CheckinCardProps {
   task: TaskWithTemplate;
-  streakDays?: number;
+  date?: Date;
+  powerPlayAvailable?: boolean;
+  powerPlayArmed?: boolean;
+  powerPlayPending?: boolean;
+  onArmPowerPlay?: () => void;
 }
 
-export function CheckinCard({ task, streakDays = 0 }: CheckinCardProps) {
-  const { toast } = useToast();
+interface CelebrationState {
+  points: number;
+  powerPlay: boolean;
+  isUpdate: boolean;
+}
+
+const FALLBACK_VERIFICATION: VerificationConfig = {
+  method: 'manual_action',
+  allowed_sources: ['manual'],
+  requires_confirmation: false,
+  manual_requires_flag: false,
+  confirmation_action: null,
+  description: '',
+};
+
+function numberFrom(record: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return undefined;
+}
+
+export function CheckinCard({
+  task,
+  date,
+  powerPlayAvailable = false,
+  powerPlayArmed = false,
+  powerPlayPending = false,
+  onArmPowerPlay,
+}: CheckinCardProps) {
   const submitCheckin = useSubmitCheckin();
-  
-  // Get config from task instance
-  const config = task.config as Record<string, unknown>;
-  const template = task.template;
-  const verificationConfig = getVerificationConfig(config);
-  const existingMetadata = task.todayCheckin?.metadata as VerificationMetadata | null;
-  const isTimerBased = verificationConfig?.method === 'timer_based';
-  
-  // Initialize state from existing check-in or defaults
-  const [binaryValue, setBinaryValue] = useState(task.todayCheckin?.boolean_value ?? false);
-  const [numericValue, setNumericValue] = useState(task.todayCheckin?.numeric_value ?? 0);
-  const [timeValue, setTimeValue] = useState(task.todayCheckin?.time_value ?? '');
-  const [durationValue, setDurationValue] = useState(task.todayCheckin?.duration_minutes ?? 0);
+  const { toast } = useToast();
 
-  // Track if user has made changes
-  const [hasChanges, setHasChanges] = useState(false);
+  const configuredVerification = getVerificationConfig(task.config as Record<string, unknown> | null);
+  const verificationConfig = configuredVerification ?? FALLBACK_VERIFICATION;
+  const existingMetadata = (task.todayCheckin?.metadata || {}) as VerificationMetadata;
+  const verificationStatus = getVerificationStatus(task.todayCheckin?.metadata as Record<string, unknown> | null);
+  const isVerified = isCheckinVerified(
+    task.todayCheckin?.metadata as Record<string, unknown> | null,
+    configuredVerification
+  );
 
-  // Auto-save with debounce
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [showExactEntry, setShowExactEntry] = useState(false);
+  const [confirmPowerPlay, setConfirmPowerPlay] = useState(false);
+  const [celebration, setCelebration] = useState<CelebrationState | null>(null);
+  const [value, setValue] = useState<CheckinValue>(() => ({
+    boolean_value: task.todayCheckin?.boolean_value ?? undefined,
+    numeric_value: task.todayCheckin?.numeric_value ?? 0,
+    time_value: task.todayCheckin?.time_value ?? '',
+    duration_minutes: task.todayCheckin?.duration_minutes ?? 0,
+  }));
+
   useEffect(() => {
-    if (!hasChanges) return;
+    setValue({
+      boolean_value: task.todayCheckin?.boolean_value ?? undefined,
+      numeric_value: task.todayCheckin?.numeric_value ?? 0,
+      time_value: task.todayCheckin?.time_value ?? '',
+      duration_minutes: task.todayCheckin?.duration_minutes ?? 0,
+    });
+    setNeedsConfirmation(false);
+  }, [task.todayCheckin]);
 
-    const timeout = setTimeout(() => {
-      saveCheckin();
-    }, 1000);
+  useEffect(() => {
+    if (powerPlayArmed) setConfirmPowerPlay(false);
+  }, [powerPlayArmed]);
 
-    return () => clearTimeout(timeout);
-  }, [binaryValue, numericValue, timeValue, durationValue, hasChanges]);
+  const dismissCelebration = useCallback(() => setCelebration(null), []);
+  const icon = TASK_ICONS[task.template?.icon ?? 'activity'] ?? '📋';
+  const isCompleted = !!task.todayCheckin;
+  const isPending = submitCheckin.isPending;
+  const config = (task.config || {}) as Record<string, unknown>;
+  const templateDefaults = (task.template?.default_config || {}) as Record<string, unknown>;
+  const minValue = task.template?.min_value ?? undefined;
+  const maxValue = task.template?.max_value ?? undefined;
+  const customDescription = typeof config.custom_description === 'string' ? config.custom_description : undefined;
+  const description = customDescription || task.template?.description;
+  const scoringMode = typeof config.scoring_mode === 'string' ? config.scoring_mode : 'detailed';
+  const goalPoints = numberFrom(config, 'binary_points', 'points') ?? 3;
+  const goalTarget = numberFrom(config, 'daily_limit_minutes', 'target', 'threshold')
+    ?? numberFrom(templateDefaults, 'daily_limit_minutes', 'target', 'threshold');
+  const canQuickScoreGoal = scoringMode === 'binary'
+    && (task.input_type === 'numeric' || task.input_type === 'duration')
+    && verificationConfig.method !== 'timer_based'
+    && goalTarget !== undefined;
 
-  const saveCheckin = async (metadata?: Record<string, unknown>) => {
-    const value: CheckinValue = {};
-    
-    switch (task.input_type) {
-      case 'binary':
-        value.boolean_value = binaryValue;
-        break;
-      case 'numeric':
-        value.numeric_value = numericValue;
-        break;
-      case 'time':
-        value.time_value = timeValue || undefined;
-        break;
-      case 'duration':
-        value.duration_minutes = durationValue;
-        break;
-    }
+  const handleValueChange = useCallback((newValue: CheckinValue) => {
+    setValue((previous) => ({ ...previous, ...newValue }));
+    setNeedsConfirmation(true);
+  }, []);
 
-    // Include verification metadata if provided
-    if (metadata) {
-      value.metadata = metadata;
-    }
-
-    try {
-      await submitCheckin.mutateAsync({
-        taskInstanceId: task.id,
-        value,
-      });
-      setHasChanges(false);
-    } catch (error) {
-      toast({
-        title: 'Error saving check-in',
-        description: 'Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // Handler for timer completion with metadata
-  const handleTimerComplete = async (minutes: number, metadata: Record<string, unknown>) => {
-    setDurationValue(minutes);
-    
-    const value: CheckinValue = {
-      duration_minutes: minutes,
-      metadata,
+  const handleSubmit = async (
+    checkinValue: CheckinValue,
+    source: VerificationMetadata['source'] = 'manual',
+    confirmed = false,
+    metadataPatch?: VerificationMetadata
+  ) => {
+    const metadata = {
+      ...buildVerifiedMetadata(source, confirmed, existingMetadata),
+      ...(metadataPatch || {}),
     };
 
     try {
-      await submitCheckin.mutateAsync({
+      const wasExisting = !!task.todayCheckin;
+      const result = await submitCheckin.mutateAsync({
         taskInstanceId: task.id,
-        value,
+        value: { ...checkinValue, metadata },
+        date,
       });
-      toast({
-        title: 'Session verified!',
-        description: `${minutes} minutes logged with timer verification.`,
-      });
+      const points = Number(result.scoringEvent?.points_awarded ?? 0);
+      const powerPlay = result.scoringEvent?.powerup_applied != null;
+
+      setNeedsConfirmation(false);
+
+      if (points > 0) {
+        triggerConfetti();
+        setCelebration({ points, powerPlay, isUpdate: wasExisting });
+      } else {
+        toast({ title: 'Result logged', description: 'No points were awarded for this result.' });
+      }
     } catch (error) {
+      console.error('Checkin error:', error);
       toast({
-        title: 'Error saving check-in',
-        description: 'Please try again.',
+        title: 'Check-in failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
     }
   };
 
-  // Calculate progress and points based on input type
-  const calculateProgress = (): { progress: number; points: number; isComplete: boolean } => {
-    switch (task.scoring_type) {
-      case 'binary_yesno': {
-        const pts = binaryValue ? (config.points_per_completion as number || 10) : 0;
-        return { progress: binaryValue ? 100 : 0, points: pts, isComplete: binaryValue };
-      }
-      case 'linear_per_unit': {
-        const unitSize = (config.unit_size as number) || 1;
-        const ptsPerUnit = (config.points_per_unit as number) || 1;
-        const cap = (config.daily_cap as number) || 100;
-        const val = task.input_type === 'duration' ? durationValue : numericValue;
-        const pts = Math.min((val / unitSize) * ptsPerUnit, cap);
-        const prog = Math.min((pts / cap) * 100, 100);
-        return { progress: prog, points: pts, isComplete: pts >= cap };
-      }
-      case 'threshold': {
-        const threshold = (config.threshold as number) || 0;
-        const ptsForThreshold = (config.points_for_threshold as number) || 10;
-        const val = task.input_type === 'duration' ? durationValue : numericValue;
-        const met = val >= threshold;
-        return { progress: met ? 100 : (val / threshold) * 100, points: met ? ptsForThreshold : 0, isComplete: met };
-      }
-      case 'time_before': {
-        if (!timeValue) return { progress: 0, points: 0, isComplete: false };
-        const targetTime = (config.target_time as string) || '23:00';
-        const ptsForSuccess = (config.points_for_success as number) || 10;
-        const [valH, valM] = timeValue.split(':').map(Number);
-        const [tarH, tarM] = targetTime.split(':').map(Number);
-        const met = valH * 60 + valM <= tarH * 60 + tarM;
-        return { progress: met ? 100 : 50, points: met ? ptsForSuccess : 0, isComplete: met };
-      }
-      case 'time_after': {
-        if (!timeValue) return { progress: 0, points: 0, isComplete: false };
-        const targetTime = (config.target_time as string) || '06:00';
-        const ptsForSuccess = (config.points_for_success as number) || 10;
-        const [valH, valM] = timeValue.split(':').map(Number);
-        const [tarH, tarM] = targetTime.split(':').map(Number);
-        const met = valH * 60 + valM >= tarH * 60 + tarM;
-        return { progress: met ? 100 : 50, points: met ? ptsForSuccess : 0, isComplete: met };
-      }
-      case 'tiered': {
-        const tiers = (config.tiers as Array<{ min: number; max: number | null; points: number }>) || [];
-        const val = numericValue;
-        let pts = 0;
-        for (const tier of tiers) {
-          if (val >= tier.min && (tier.max === null || val < tier.max)) {
-            pts = tier.points;
-            break;
-          }
-        }
-        return { progress: pts > 0 ? 100 : (val > 0 ? 50 : 0), points: pts, isComplete: pts > 0 };
-      }
-      default:
-        return { progress: 0, points: 0, isComplete: false };
+  const handleConfirmation = async () => {
+    const validation = validateCheckinValue(task.input_type, value, minValue, maxValue);
+    if (!validation.valid) {
+      toast({ title: 'Invalid value', description: validation.error, variant: 'destructive' });
+      return;
     }
+    await handleSubmit(value, 'manual', true);
   };
 
-  const { progress, points, isComplete } = calculateProgress();
-  const icon = template?.icon ? TASK_ICONS[template.icon] || '📊' : '📊';
-  const unitLabel = template?.unit === 'boolean' ? '' : template?.unit || '';
-
-  const handleValueChange = (setter: React.Dispatch<React.SetStateAction<any>>) => (value: any) => {
-    setter(value);
-    setHasChanges(true);
+  const handleTimestampAction = async () => {
+    const now = new Date();
+    const timeString = now.toTimeString().slice(0, 5);
+    const actionType = verificationConfig.confirmation_action === 'going_to_bed' ? 'bedtime' : 'wake';
+    const metadata = createTimeCaptureMetadata(actionType, existingMetadata);
+    await handleSubmit({ time_value: timeString }, 'manual', true, metadata);
   };
+
+  const handleBinaryChange = async (newValue: boolean) => {
+    const checkinValue: CheckinValue = { boolean_value: newValue };
+    setValue((previous) => ({ ...previous, ...checkinValue }));
+    if (!verificationConfig.requires_confirmation) await handleSubmit(checkinValue, 'manual', true);
+    else setNeedsConfirmation(true);
+  };
+
+  const handleQuickGoal = async (hitGoal: boolean) => {
+    const checkinValue = getManualGoalCheckinValue(task, hitGoal);
+    if (!checkinValue) return;
+    setValue((previous) => ({ ...previous, ...checkinValue }));
+    await handleSubmit(checkinValue, 'manual', true, { manual_fallback: true });
+  };
+
+  const handleNumericChange = (newValue: number) => handleValueChange({ numeric_value: newValue });
+  const handleTimeChange = (newValue: string) => handleValueChange({ time_value: newValue });
+  const handleDurationChange = (minutes: number) => handleValueChange({ duration_minutes: minutes });
 
   const renderInput = () => {
     switch (task.input_type) {
       case 'binary':
-        return (
-          <BinaryCheckinInput
-            value={binaryValue}
-            onChange={handleValueChange(setBinaryValue)}
-            disabled={submitCheckin.isPending}
-          />
-        );
+        return <BinaryCheckinInput value={value.boolean_value} onChange={handleBinaryChange} disabled={isPending} />;
       case 'numeric':
-        return (
-          <NumericCheckinInput
-            value={numericValue}
-            onChange={handleValueChange(setNumericValue)}
-            disabled={submitCheckin.isPending}
-            min={template?.min_value ?? 0}
-            max={template?.max_value ?? 100000}
-            step={(config.unit_size as number) || 1}
-            unit={unitLabel}
-          />
-        );
+        return <NumericCheckinInput value={value.numeric_value ?? 0} onChange={handleNumericChange} unit={task.template?.unit ?? 'count'} min={minValue} max={maxValue} step={typeof config.unit_size === 'number' ? config.unit_size : 1} disabled={isPending} />;
       case 'time':
-        return (
-          <TimeCheckinInput
-            value={timeValue}
-            onChange={handleValueChange(setTimeValue)}
-            disabled={submitCheckin.isPending}
-            label={task.task_name}
-            targetTime={config.target_time as string}
-            isBefore={task.scoring_type === 'time_before'}
-          />
-        );
+        return <TimeCheckinInput value={value.time_value ?? ''} onChange={handleTimeChange} disabled={isPending} label={task.task_name} targetTime={typeof config.target_time === 'string' ? config.target_time : undefined} isBefore={task.scoring_type === 'time_before'} />;
       case 'duration':
-        // Use TimerCheckinInput for timer-based verification (meditation, journaling)
-        if (isTimerBased) {
-          return (
-            <TimerCheckinInput
-              value={durationValue}
-              onChange={handleTimerComplete}
-              disabled={submitCheckin.isPending}
-              threshold={config.threshold as number}
-              minDurationSeconds={verificationConfig?.min_duration_seconds || 60}
-              taskName={task.task_name}
-            />
-          );
+        if (verificationConfig.method === 'timer_based') {
+          return <TimerCheckinInput value={value.duration_minutes ?? 0} onChange={(minutes, timerMetadata) => { setValue((previous) => ({ ...previous, duration_minutes: minutes })); handleSubmit({ duration_minutes: minutes }, 'timer', true, timerMetadata as VerificationMetadata); }} threshold={typeof config.threshold === 'number' ? config.threshold : undefined} minDurationSeconds={verificationConfig.min_duration_seconds} taskName={task.task_name} disabled={isPending} />;
         }
-        // Fall back to standard duration input
-        return (
-          <DurationCheckinInput
-            value={durationValue}
-            onChange={handleValueChange(setDurationValue)}
-            disabled={submitCheckin.isPending}
-            threshold={config.threshold as number}
-          />
-        );
+        return <DurationCheckinInput value={value.duration_minutes ?? 0} onChange={handleDurationChange} disabled={isPending} threshold={typeof config.threshold === 'number' ? config.threshold : undefined} />;
       default:
         return null;
     }
   };
 
+  const showTimestampButton = verificationConfig.captures_timestamp && task.input_type === 'time';
+  const needsScoreButton = needsConfirmation && task.input_type !== 'binary' && !showTimestampButton;
+  const needsBinaryConfirmation = needsConfirmation && task.input_type === 'binary' && verificationConfig.requires_confirmation;
+  const confirmationAction = needsScoreButton ? 'log_score' : verificationConfig.confirmation_action || 'confirm';
+
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className={cn(
-        'task-card relative',
-        isComplete && 'ring-1 ring-primary/50'
-      )}
-    >
-      {/* Saving indicator */}
-      {submitCheckin.isPending && (
-        <div className="absolute top-2 right-2">
-          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-        </div>
-      )}
-
-      <div className="flex items-start gap-3 mb-4">
-        {/* Icon & Streak */}
-        <div className="relative">
-          <div className={cn(
-            'w-12 h-12 rounded-xl flex items-center justify-center text-2xl',
-            isComplete ? 'bg-primary/20' : 'bg-muted'
-          )}>
-            {icon}
-          </div>
-          {streakDays > 0 && (
-            <div className="absolute -top-1 -right-1 streak-badge px-1.5 py-0.5 text-[10px]">
-              <Flame className="w-3 h-3" />
-              {streakDays}
+    <>
+      <Card className={`p-4 transition-all ${isCompleted ? 'border-primary/30 bg-primary/5' : ''} ${powerPlayArmed ? 'ring-1 ring-secondary/50 border-secondary/50' : ''}`}>
+        <div className="flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${isCompleted ? 'bg-primary/20' : 'bg-muted'}`}>{icon}</div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h3 className="font-semibold text-sm truncate">{task.task_name}</h3>
+              <VerificationBadge verificationConfig={configuredVerification} metadata={task.todayCheckin?.metadata as VerificationMetadata | null} isVerified={isVerified} />
             </div>
-          )}
-        </div>
+            {description && <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{description}</p>}
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-sm">{task.task_name}</h3>
-            {isComplete && (
-              <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                <Check className="w-3 h-3 text-primary-foreground" />
+            {powerPlayArmed && !isCompleted && (
+              <div className="mb-3 rounded-lg border border-secondary/40 bg-secondary/10 px-3 py-2 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-secondary fill-secondary" />
+                <div className="flex-1"><p className="text-xs font-bold text-secondary">2× POWER PLAY ARMED</p><p className="text-[11px] text-muted-foreground">Your next positive score on this task is doubled.</p></div>
               </div>
             )}
-            <VerificationBadge
-              verificationConfig={verificationConfig}
-              metadata={existingMetadata}
-              isVerified={!!existingMetadata?.confirmed}
-            />
+
+            {powerPlayAvailable && !isCompleted && onArmPowerPlay && !confirmPowerPlay && (
+              <button type="button" onClick={() => setConfirmPowerPlay(true)} className="mb-3 w-full rounded-lg border border-secondary/25 bg-secondary/5 px-3 py-2 flex items-center justify-between text-left hover:bg-secondary/10 transition-colors">
+                <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-secondary" /><span className="text-xs font-semibold">Use 2× on {task.task_name}</span></span>
+                <span className="text-[10px] text-muted-foreground">1/week</span>
+              </button>
+            )}
+
+            <AnimatePresence initial={false}>
+              {confirmPowerPlay && powerPlayAvailable && onArmPowerPlay && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  <div className="mb-3 rounded-xl border border-secondary/35 bg-secondary/10 p-3">
+                    <p className="text-sm font-semibold flex items-center gap-2"><Zap className="w-4 h-4 text-secondary" />Double this task?</p>
+                    <p className="text-xs text-muted-foreground mt-1">Your next positive {task.task_name} score is worth 2×. You only get one Power Play this week.</p>
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      <Button variant="outline" size="sm" onClick={() => setConfirmPowerPlay(false)} disabled={powerPlayPending}>Cancel</Button>
+                      <Button size="sm" onClick={() => { onArmPowerPlay(); setConfirmPowerPlay(false); }} disabled={powerPlayPending} className="gap-1"><Zap className="w-3.5 h-3.5" />{powerPlayPending ? 'Arming...' : 'Arm 2×'}</Button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {verificationConfig.auto_import_only ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground"><Shield className="w-4 h-4" /><span>This score syncs from your connected device source.</span></div>
+            ) : showTimestampButton ? (
+              <ConfirmationButton confirmationAction={verificationConfig.confirmation_action || 'confirm'} isConfirmed={isCompleted && isVerified} onConfirm={handleTimestampAction} disabled={isPending} capturesTimestamp />
+            ) : canQuickScoreGoal ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2"><Button variant="outline" className="h-11" onClick={() => handleQuickGoal(false)} disabled={isPending}>Missed</Button><Button className="h-11 font-bold" onClick={() => handleQuickGoal(true)} disabled={isPending}>{powerPlayArmed ? `Done +${goalPoints * 2} ⚡` : `Done +${goalPoints}`}</Button></div>
+                {task.template?.supports_integration && <p className="text-[11px] text-center text-muted-foreground">Manual check-off works now. Exact or device data can replace it later.</p>}
+                <button type="button" onClick={() => setShowExactEntry((current) => !current)} className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1">{showExactEntry ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}{showExactEntry ? 'Hide exact amount' : 'Log exact amount'}</button>
+                <AnimatePresence initial={false}>{showExactEntry && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden"><div className="pt-1">{renderInput()}{needsScoreButton && <div className="mt-3"><ConfirmationButton confirmationAction="log_score" isConfirmed={false} onConfirm={handleConfirmation} disabled={isPending} /></div>}</div></motion.div>}</AnimatePresence>
+              </div>
+            ) : (
+              <>{renderInput()}<AnimatePresence>{(needsScoreButton || needsBinaryConfirmation) && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-3"><ConfirmationButton confirmationAction={confirmationAction} isConfirmed={false} onConfirm={handleConfirmation} disabled={isPending} /></motion.div>}</AnimatePresence></>
+            )}
+
+            {configuredVerification && verificationStatus === 'flagged' && <div className="mt-3 flex items-center gap-2 p-2 rounded-lg bg-pending/10 text-pending text-xs"><Flag className="w-3.5 h-3.5" /><span>Manual entry flagged for review.</span></div>}
+            {configuredVerification && verificationStatus === 'verified' && isCompleted && <div className="mt-3 flex items-center gap-2 text-primary text-xs"><ShieldCheck className="w-3.5 h-3.5" /><span>Verified score</span></div>}
+            {configuredVerification && verificationStatus === 'unverified' && isCompleted && <div className="mt-3 flex items-center gap-2 p-2 rounded-lg bg-loss/10 text-loss text-xs"><AlertCircle className="w-3.5 h-3.5" /><span>Not verified — no points awarded.</span></div>}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {template?.description || 'Complete this task to earn points'}
-          </p>
         </div>
+      </Card>
 
-        {/* Points */}
-        <div className="text-right">
-          <span className={cn(
-            'score-text text-lg',
-            isComplete ? 'text-primary' : 'text-muted-foreground'
-          )}>
-            +{Math.round(points)}
-          </span>
-          <span className="text-xs text-muted-foreground block">pts</span>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div className="mb-4">
-        <Progress 
-          value={progress} 
-          className="h-1.5"
-        />
-      </div>
-
-      {/* Input component based on type */}
-      {renderInput()}
-    </motion.div>
+      <AnimatePresence>{celebration && <ScoreCelebration points={celebration.points} taskName={task.task_name} powerPlay={celebration.powerPlay} isUpdate={celebration.isUpdate} onDone={dismissCelebration} />}</AnimatePresence>
+    </>
   );
 }

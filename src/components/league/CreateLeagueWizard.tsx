@@ -1,36 +1,46 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Copy, Share2, Trophy, Users, Zap } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Gamepad2, ListOrdered, Settings2, Share2, Swords, Trophy, UserRound, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateLeague, useCreateSeason, useConfigureSeasonTasks } from '@/hooks/useLeagues';
+import type { LeagueGameFormat } from '@/hooks/useLeagues';
 import { useStartSeason } from '@/hooks/useSeasonActions';
-import { useTaskTemplatesByCategory, TaskTemplate } from '@/hooks/useTaskTemplates';
+import { useTaskTemplatesByCategory, type TaskTemplate } from '@/hooks/useTaskTemplates';
 import { toast } from 'sonner';
 import { TaskSelectionGrid } from './TaskSelectionGrid';
-import { TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
-import { DifficultyQuickStart, QuickStartDifficulty, DIFFICULTY_PRESETS } from './DifficultyQuickStart';
+import { type TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
+import { DifficultyQuickStart, type StarterPackId, STARTER_PACKS } from './DifficultyQuickStart';
 import { TaskSummaryPreview } from './TaskSummaryPreview';
+import { CustomTaskListBuilder, type CustomTaskEntry } from './CustomTaskListBuilder';
 
 type WizardStep = 'details' | 'tasks' | 'invite';
 
-const RECOMMENDED_TASK_NAMES = [
-  'Steps',
-  'Workout',
-  'Reading',
-  'Journaling',
-  'Wake Time',
-];
-
-const POINTS_PER_TASK = 10;
+const CUSTOM_CHALLENGE_PREFIX = 'Custom Challenge —';
 
 interface LeagueFormData {
   name: string;
   description: string;
   weeksCount: number;
+  gameFormat: LeagueGameFormat;
+}
+
+function serializeConfig(config: TaskConfigOverrides) {
+  return {
+    scoring_mode: config.scoring_mode,
+    ...(config.target_time && { target_time: config.target_time }),
+    ...(config.threshold !== undefined && { threshold: config.threshold }),
+    ...(config.target !== undefined && { target: config.target }),
+    ...(config.points !== undefined && { points: config.points }),
+    ...(config.binary_points !== undefined && { binary_points: config.binary_points }),
+    ...(config.max_tiers !== undefined && { max_tiers: config.max_tiers }),
+    ...(config.daily_limit_minutes !== undefined && { daily_limit_minutes: config.daily_limit_minutes }),
+    ...(config.custom_name?.trim() && { custom_name: config.custom_name.trim() }),
+    ...(config.custom_description?.trim() && { custom_description: config.custom_description.trim() }),
+  };
 }
 
 export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
@@ -39,9 +49,12 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const [formData, setFormData] = useState<LeagueFormData>({
     name: '',
     description: '',
-    weeksCount: 4,
+    weeksCount: 8,
+    gameFormat: 'head_to_head',
   });
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
+  const [customTasks, setCustomTasks] = useState<CustomTaskEntry[]>([]);
+  const [defaultPackLoaded, setDefaultPackLoaded] = useState(false);
   const [createdLeague, setCreatedLeague] = useState<{ id: string; invite_code: string | null } | null>(null);
   const [createdSeason, setCreatedSeason] = useState<{ id: string } | null>(null);
 
@@ -51,9 +64,71 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const startSeason = useStartSeason();
   const { groupedTemplates, isLoading: tasksLoading } = useTaskTemplatesByCategory();
 
+  const allTemplates = useMemo(
+    () => Object.values(groupedTemplates || {}).flat(),
+    [groupedTemplates]
+  );
+
+  const customChallengeTemplates = useMemo(
+    () => allTemplates.filter((template) => template.name.startsWith(CUSTOM_CHALLENGE_PREFIX)),
+    [allTemplates]
+  );
+
+  const customTemplateIds = useMemo(
+    () => new Set(customChallengeTemplates.map((template) => template.id)),
+    [customChallengeTemplates]
+  );
+
+  const standardGroupedTemplates = useMemo(() => {
+    const result: Record<string, TaskTemplate[]> = {};
+    Object.entries(groupedTemplates || {}).forEach(([category, templates]) => {
+      const visible = templates.filter((template) => !customTemplateIds.has(template.id));
+      if (visible.length > 0) result[category] = visible;
+    });
+    return result;
+  }, [groupedTemplates, customTemplateIds]);
+
+  const taskCount = taskConfigs.size + customTasks.length;
+
+  const buildStarterPack = useCallback((packId: StarterPackId) => {
+    const pack = STARTER_PACKS[packId];
+    const next = new Map<string, TaskConfigOverrides>();
+
+    pack.tasks.forEach((taskName) => {
+      const template = allTemplates.find(
+        (candidate) => !customTemplateIds.has(candidate.id) && candidate.name === taskName
+      );
+      if (!template) return;
+      const baseConfig = getInitialConfig(template);
+      const overrides = pack.overrides?.[taskName] || {};
+      next.set(template.id, { ...baseConfig, ...overrides, scoring_mode: 'binary' });
+    });
+
+    return next;
+  }, [allTemplates, customTemplateIds]);
+
+  useEffect(() => {
+    if (step !== 'tasks' || defaultPackLoaded || tasksLoading || taskConfigs.size > 0) return;
+    const classic = buildStarterPack('classic');
+    if (classic.size >= 3) {
+      setTaskConfigs(classic);
+      setDefaultPackLoaded(true);
+    }
+  }, [step, defaultPackLoaded, tasksLoading, taskConfigs.size, buildStarterPack]);
+
   const handleDetailsSubmit = async () => {
     if (!formData.name.trim()) {
       toast.error('Please enter a league name');
+      return;
+    }
+    if (tasksLoading) {
+      toast.info('Loading the Zrizin scorecard…');
+      return;
+    }
+
+    const classic = buildStarterPack('classic');
+    if (classic.size < 3) {
+      toast.error('The default scorecard is not available yet.');
       return;
     }
 
@@ -61,6 +136,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       const league = await createLeague.mutateAsync({
         name: formData.name,
         description: formData.description,
+        gameFormat: formData.gameFormat,
       });
 
       const season = await createSeason.mutateAsync({
@@ -70,110 +146,122 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
         startDate: new Date(),
       });
 
+      const taskConfigArray = Array.from(classic.entries()).map(([taskId, config], index) => ({
+        task_template_id: taskId,
+        display_order: index,
+        config_overrides: serializeConfig(config),
+      }));
+      await configureTasks.mutateAsync({ seasonId: season.id, taskConfigs: taskConfigArray });
+
       setCreatedLeague(league);
       setCreatedSeason(season);
-      setStep('tasks');
+      setTaskConfigs(classic);
+      setDefaultPackLoaded(true);
+
+      if (formData.gameFormat === 'solo') {
+        setStep('tasks');
+        toast.success('Solo created. Choose exactly what you want to track.');
+        return;
+      }
+
+      setStep('invite');
+      toast.success('League created. Classic Zrizin is already set up.');
     } catch (error) {
+      console.error(error);
       toast.error('Failed to create league');
     }
   };
 
   const handleToggleTask = (taskId: string, template: TaskTemplate) => {
-    setTaskConfigs((prev) => {
-      const newMap = new Map(prev);
-      if (newMap.has(taskId)) {
-        newMap.delete(taskId);
-      } else {
-        newMap.set(taskId, getInitialConfig(template));
-      }
-      return newMap;
+    setTaskConfigs((previous) => {
+      const next = new Map(previous);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.set(taskId, getInitialConfig(template));
+      return next;
     });
   };
 
   const handleUpdateConfig = (taskId: string, config: TaskConfigOverrides) => {
-    setTaskConfigs((prev) => {
-      const newMap = new Map(prev);
-      newMap.set(taskId, config);
-      return newMap;
+    setTaskConfigs((previous) => {
+      const next = new Map(previous);
+      next.set(taskId, config);
+      return next;
     });
   };
 
   const handleClearAll = () => {
     setTaskConfigs(new Map());
-    setTaskConfigs(new Map());
+    setCustomTasks([]);
   };
 
-  const handleQuickStart = (difficulty: QuickStartDifficulty) => {
+  const handleQuickStart = (packId: StarterPackId) => {
     if (!groupedTemplates) return;
-    
-    const allTemplates = Object.values(groupedTemplates).flat();
-    const preset = DIFFICULTY_PRESETS[difficulty];
-    const newConfigs = new Map<string, TaskConfigOverrides>();
-    
-    RECOMMENDED_TASK_NAMES.forEach((taskName) => {
-      const template = allTemplates.find(t => t.name.includes(taskName));
-      if (template) {
-        const baseConfig = getInitialConfig(template);
-        const presetValues = preset.values[taskName as keyof typeof preset.values];
-        newConfigs.set(template.id, { ...baseConfig, ...presetValues });
-      }
-    });
-    
-    setTaskConfigs(newConfigs);
-    toast.success(`Selected ${newConfigs.size} tasks with ${preset.label} settings!`);
+    const next = buildStarterPack(packId);
+    setTaskConfigs(next);
+    setDefaultPackLoaded(true);
+    toast.success(`${STARTER_PACKS[packId].label} loaded. Your custom tasks stayed in place.`);
   };
 
   const handleTasksSubmit = async () => {
-    if (taskConfigs.size < 3) {
-      toast.error('Please select at least 3 tasks');
+    if (taskCount < 3) {
+      toast.error('Choose at least 3 daily scoring tasks');
+      return;
+    }
+
+    const unnamedCustomTask = customTasks.find((entry) => !entry.value.config.custom_name?.trim());
+    if (unnamedCustomTask) {
+      toast.error('Give every custom task a name');
       return;
     }
 
     if (!createdSeason) return;
 
     try {
-      const taskConfigArray = Array.from(taskConfigs.entries()).map(([taskId, config], index) => ({
+      const standardConfigs = Array.from(taskConfigs.entries()).map(([taskId, config], index) => ({
         task_template_id: taskId,
         display_order: index,
-        config_overrides: {
-          scoring_mode: config.scoring_mode,
-          ...(config.target_time && { target_time: config.target_time }),
-          ...(config.threshold && { threshold: config.threshold }),
-          ...(config.target && { target: config.target }),
-          ...(config.points && { points: config.points }),
-          ...(config.binary_points && { binary_points: config.binary_points }),
-          ...(config.max_tiers && { max_tiers: config.max_tiers }),
-        },
+        config_overrides: serializeConfig(config),
+      }));
+      const customConfigs = customTasks.map((entry, index) => ({
+        task_template_id: entry.value.templateId,
+        display_order: standardConfigs.length + index,
+        config_overrides: serializeConfig(entry.value.config),
       }));
 
       await configureTasks.mutateAsync({
         seasonId: createdSeason.id,
-        taskConfigs: taskConfigArray,
+        taskConfigs: [...standardConfigs, ...customConfigs],
       });
 
-      await startSeason.mutateAsync(createdSeason.id);
+      if (formData.gameFormat === 'solo') {
+        await startSeason.mutateAsync({ seasonId: createdSeason.id, gameFormat: 'solo' });
+        toast.success('Solo is live. Your goals are on the clock.');
+        onClose();
+        navigate('/tasks');
+        return;
+      }
 
       setStep('invite');
-      toast.success('Tasks configured and season started!');
-    } catch (error) {
-      toast.error('Failed to configure tasks');
+      toast.success('Your game is set. Now bring in the competition.');
+    } catch {
+      toast.error('Failed to save league rules');
     }
   };
 
   const copyInviteCode = () => {
-    if (createdLeague?.invite_code) {
-      navigator.clipboard.writeText(createdLeague.invite_code);
-      toast.success('Invite code copied!');
-    }
+    if (!createdLeague?.invite_code) return;
+    navigator.clipboard.writeText(createdLeague.invite_code);
+    toast.success('Invite code copied!');
   };
 
   const shareInvite = async () => {
     if (createdLeague?.invite_code && navigator.share) {
       try {
+        const inviteUrl = `${window.location.origin}/?join=${encodeURIComponent(createdLeague.invite_code)}`;
         await navigator.share({
           title: `Join ${formData.name} on Zrizin`,
-          text: `Use invite code: ${createdLeague.invite_code}`,
-          url: window.location.origin,
+          text: 'Tap the link to join my Zrizin league.',
+          url: inviteUrl,
         });
       } catch {
         copyInviteCode();
@@ -188,52 +276,53 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     navigate('/league');
   };
 
-  const steps = [
-    { id: 'details', label: 'Details', icon: Trophy },
-    { id: 'tasks', label: 'Tasks', icon: Zap },
-    { id: 'invite', label: 'Invite', icon: Users },
-  ];
-
-  const currentStepIndex = steps.findIndex((s) => s.id === step);
+  const isLeaderboard = formData.gameFormat === 'leaderboard';
+  const isSolo = formData.gameFormat === 'solo';
+  const steps = isSolo
+    ? [
+        { id: 'details', label: 'Solo', icon: UserRound },
+        { id: 'tasks', label: 'Goals', icon: Gamepad2 },
+      ]
+    : step === 'tasks'
+      ? [
+          { id: 'details', label: 'League', icon: Trophy },
+          { id: 'tasks', label: 'Game', icon: Gamepad2 },
+          { id: 'invite', label: 'Friends', icon: Users },
+        ]
+      : [
+          { id: 'details', label: 'League', icon: Trophy },
+          { id: 'invite', label: 'Friends', icon: Users },
+        ];
+  const currentStepIndex = steps.findIndex((item) => item.id === step);
 
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-auto">
       <div className="min-h-screen flex flex-col">
-        {/* Header */}
         <div className="sticky top-0 bg-background/95 backdrop-blur border-b border-border z-10">
           <div className="max-w-2xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={step === 'details' ? onClose : () => setStep(steps[currentStepIndex - 1].id as WizardStep)}
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                {step === 'details' ? 'Cancel' : 'Back'}
-              </Button>
-              <h2 className="font-display font-bold text-lg">Create League</h2>
+              {step === 'details' ? (
+                <Button variant="ghost" size="sm" onClick={onClose}>
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Cancel
+                </Button>
+              ) : (
+                <div className="w-16" />
+              )}
+              <h2 className="font-display font-bold text-lg">{isSolo ? 'Create Solo' : 'Create League'}</h2>
               <div className="w-16" />
             </div>
 
-            {/* Progress */}
             <div className="flex items-center justify-center gap-2">
-              {steps.map((s, i) => (
-                <div key={s.id} className="flex items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                      i <= currentStepIndex
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {i < currentStepIndex ? <Check className="w-4 h-4" /> : i + 1}
+              {steps.map((item, index) => (
+                <div key={item.id} className="flex items-center">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                    index <= currentStepIndex ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {index < currentStepIndex ? <Check className="w-4 h-4" /> : index + 1}
                   </div>
-                  {i < steps.length - 1 && (
-                    <div
-                      className={`w-12 h-0.5 mx-1 ${
-                        i < currentStepIndex ? 'bg-primary' : 'bg-muted'
-                      }`}
-                    />
+                  {index < steps.length - 1 && (
+                    <div className={`w-12 h-0.5 mx-1 ${index < currentStepIndex ? 'bg-primary' : 'bg-muted'}`} />
                   )}
                 </div>
               ))}
@@ -241,192 +330,235 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 pb-24">
           <AnimatePresence mode="wait">
             {step === 'details' && (
-              <motion.div
-                key="details"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
-              >
+              <motion.div key="details" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                 <div className="text-center mb-8">
                   <Trophy className="w-12 h-12 text-primary mx-auto mb-3" />
-                  <h3 className="text-xl font-display font-bold">Name Your League</h3>
-                  <p className="text-muted-foreground">Create a league for you and your friends to compete</p>
+                  <h3 className="text-xl font-display font-bold">Build Your League</h3>
+                  <p className="text-muted-foreground">Choose a competition format or make it personal with Solo accountability.</p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">League Name</Label>
-                    <Input
-                      id="name"
-                      placeholder="The Productivity Pros"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    />
+                    <Label htmlFor="name">{isSolo ? 'Solo Name' : 'League Name'}</Label>
+                    <Input id="name" placeholder={isSolo ? 'My Grind' : 'The Morning League'} value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">{isSolo ? 'Personal motto (optional)' : 'League motto (optional)'}</Label>
+                    <Textarea id="description" placeholder="No excuses. Win the week." value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows={3} />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description (optional)</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="A league for serious grinders..."
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={3}
-                    />
+                    <Label>How should your league compete?</Label>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, gameFormat: 'head_to_head' })}
+                        className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                          formData.gameFormat === 'head_to_head'
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border bg-card hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-secondary/15 flex items-center justify-center">
+                            <Swords className="w-5 h-5 text-secondary" />
+                          </div>
+                          {formData.gameFormat === 'head_to_head' && <Check className="w-5 h-5 text-primary" />}
+                        </div>
+                        <p className="font-display font-bold mt-3">Head-to-Head</p>
+                        <p className="text-xs text-muted-foreground mt-1">Face one opponent each week. Win the matchup and build a W-L record.</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, gameFormat: 'leaderboard' })}
+                        className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                          formData.gameFormat === 'leaderboard'
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border bg-card hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-pending/15 flex items-center justify-center">
+                            <ListOrdered className="w-5 h-5 text-pending" />
+                          </div>
+                          {formData.gameFormat === 'leaderboard' && <Check className="w-5 h-5 text-primary" />}
+                        </div>
+                        <p className="font-display font-bold mt-3">Leaderboard</p>
+                        <p className="text-xs text-muted-foreground mt-1">Everyone plays the same scorecard. Score the most points and finish #1.</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, gameFormat: 'solo' })}
+                        className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                          formData.gameFormat === 'solo'
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border bg-card hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+                            <UserRound className="w-5 h-5 text-primary" />
+                          </div>
+                          {formData.gameFormat === 'solo' && <Check className="w-5 h-5 text-primary" />}
+                        </div>
+                        <p className="font-display font-bold mt-3">Solo</p>
+                        <p className="text-xs text-muted-foreground mt-1">Choose your own scorecard, build streaks and stats, and share a live accountability page.</p>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="months">Season Length</Label>
+                    <Label>Season Length</Label>
                     <div className="grid grid-cols-3 gap-2">
                       {[1, 2, 3, 4, 5, 6].map((months) => {
                         const weeks = months * 4;
                         return (
-                          <Button
-                            key={months}
-                            type="button"
-                            variant={formData.weeksCount === weeks ? 'default' : 'outline'}
-                            className="h-auto py-2 flex-col"
-                            onClick={() => setFormData({ ...formData, weeksCount: weeks })}
-                          >
+                          <Button key={months} type="button" variant={formData.weeksCount === weeks ? 'default' : 'outline'} className="h-auto py-2 flex-col" onClick={() => setFormData({ ...formData, weeksCount: weeks })}>
                             <span>{months} month{months > 1 ? 's' : ''}</span>
-                            <span className="text-xs opacity-70">({weeks} weeks)</span>
+                            <span className="text-xs opacity-70">{weeks} {isSolo ? 'tracking weeks' : isLeaderboard ? 'scoring weeks' : 'matchups'}</span>
                           </Button>
                         );
                       })}
                     </div>
+                    <p className="text-xs text-muted-foreground">2 months is the recommended default. You can still choose shorter or longer.</p>
                   </div>
                 </div>
 
-                <Button
-                  onClick={handleDetailsSubmit}
-                  className="w-full"
-                  size="lg"
-                  disabled={createLeague.isPending || createSeason.isPending}
-                >
-                  {createLeague.isPending || createSeason.isPending ? 'Creating...' : 'Continue'}
+                <Button onClick={handleDetailsSubmit} className="w-full" size="lg" disabled={createLeague.isPending || createSeason.isPending || configureTasks.isPending || tasksLoading}>
+                  {createLeague.isPending || createSeason.isPending || configureTasks.isPending ? 'Creating...' : isSolo ? 'Choose My Goals' : 'Create League'}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </motion.div>
             )}
 
             {step === 'tasks' && (
-              <motion.div
-                key="tasks"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
-              >
+              <motion.div key="tasks" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                 <div className="text-center mb-4">
                   <Zap className="w-12 h-12 text-secondary mx-auto mb-3" />
-                  <h3 className="text-xl font-display font-bold">Select & Configure Tasks</h3>
-                  <p className="text-muted-foreground">
-                    Choose at least 3 tasks for your league members to track daily
-                  </p>
+                  <h3 className="text-xl font-display font-bold">{isSolo ? 'Choose Your Daily Goals' : 'What Scores Each Day?'}</h3>
+                  <p className="text-muted-foreground">Classic Zrizin is already loaded. Keep it, choose another starter pack, or personalize anything.</p>
                 </div>
 
-                {/* Selection Counter */}
+                <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
+                  <p className="font-semibold text-sm">Scoring is simple by default</p>
+                  <div className="grid grid-cols-3 gap-3 mt-3 text-center">
+                    <div>
+                      <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">1</div>
+                      <p className="text-xs mt-2">Set a daily goal</p>
+                    </div>
+                    <div>
+                      <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">2</div>
+                      <p className="text-xs mt-2">Hit it for +3</p>
+                    </div>
+                    <div>
+                      <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">3</div>
+                      <p className="text-xs mt-2">{isSolo ? 'Build your streaks' : isLeaderboard ? 'Climb the board' : 'Weekly total wins'}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3">When you change a quantity, the task name changes too—for example, Pushups set to 30 becomes “30 Pushups.”</p>
+                </div>
+
                 <div className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors ${
-                  taskConfigs.size >= 3 
-                    ? 'bg-primary/10 border-primary/30' 
-                    : 'bg-muted/50 border-border'
+                  taskCount >= 3 ? 'bg-primary/10 border-primary/30' : 'bg-muted/50 border-border'
                 }`}>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Selected: {taskConfigs.size}</span>
-                    {taskConfigs.size >= 3 && (
-                      <Check className="w-4 h-4 text-primary" />
-                    )}
+                    <span className="font-medium">Daily scoring chances: {taskCount}</span>
+                    {taskCount >= 3 && <Check className="w-4 h-4 text-primary" />}
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {taskConfigs.size < 3 
-                      ? `Need ${3 - taskConfigs.size} more` 
-                      : `${taskConfigs.size * POINTS_PER_TASK} pts total`}
+                    {taskCount < 3 ? `Pick ${3 - taskCount} more` : 'Game ready'}
                   </span>
                 </div>
 
-                {/* Difficulty Quick Start */}
                 <DifficultyQuickStart onSelect={handleQuickStart} />
 
-                {tasksLoading ? (
-                  <div className="text-center py-8 text-muted-foreground">Loading tasks...</div>
-                ) : (
-                  <TaskSelectionGrid
-                    groupedTemplates={groupedTemplates || {}}
-                    selectedTasks={taskConfigs}
-                    onToggleTask={handleToggleTask}
-                    onUpdateConfig={handleUpdateConfig}
-                    onClearAll={handleClearAll}
-                    minRequired={3}
+                <section className="space-y-3">
+                  <div>
+                    <h4 className="font-display font-semibold">Custom tasks</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Add as many as you want. Each one can be a checkoff, minutes goal, or count/reps goal.</p>
+                  </div>
+                  <CustomTaskListBuilder
+                    templates={customChallengeTemplates}
+                    values={customTasks}
+                    onChange={setCustomTasks}
                   />
-                )}
+                </section>
 
-                {/* Task Summary Preview */}
-                {taskConfigs.size >= 3 && groupedTemplates && (
-                  <TaskSummaryPreview
-                    templates={Object.values(groupedTemplates).flat()}
-                    configs={taskConfigs}
-                    totalPoints={taskConfigs.size * POINTS_PER_TASK}
-                  />
+                <section className="space-y-3">
+                  <div>
+                    <h4 className="font-display font-semibold">Choose the core tasks</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Tap a task to add it. Open “Goal & scoring” to change the target; the task title updates with the new quantity.</p>
+                  </div>
+                  {tasksLoading ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading tasks...</div>
+                  ) : (
+                    <TaskSelectionGrid
+                      groupedTemplates={standardGroupedTemplates}
+                      selectedTasks={taskConfigs}
+                      onToggleTask={handleToggleTask}
+                      onUpdateConfig={handleUpdateConfig}
+                      onClearAll={handleClearAll}
+                      minRequired={3}
+                    />
+                  )}
+                </section>
+
+                {taskCount >= 3 && (
+                  <TaskSummaryPreview templates={allTemplates} configs={taskConfigs} customTasks={customTasks} />
                 )}
 
                 <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-background via-background to-transparent">
-                  <Button
-                    onClick={handleTasksSubmit}
-                    className="w-full"
-                    size="lg"
-                    disabled={taskConfigs.size < 3 || configureTasks.isPending || startSeason.isPending}
-                  >
-                    {configureTasks.isPending || startSeason.isPending ? 'Setting up...' : `Continue with ${taskConfigs.size} tasks`}
+                  <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskCount < 3 || configureTasks.isPending || startSeason.isPending}>
+                    {configureTasks.isPending || startSeason.isPending ? 'Saving game...' : isSolo ? 'Start My Solo Season' : 'Use This Scorecard & Invite Friends'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
-                  {taskConfigs.size < 3 && (
-                    <p className="text-center text-sm text-muted-foreground mt-2">
-                      Select at least 3 tasks to continue
-                    </p>
-                  )}
+                  {taskCount < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}
                 </div>
               </motion.div>
             )}
 
             {step === 'invite' && (
-              <motion.div
-                key="invite"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
-              >
+              <motion.div key="invite" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                 <div className="text-center mb-8">
                   <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
-                    <Check className="w-8 h-8 text-primary" />
+                    <Users className="w-8 h-8 text-primary" />
                   </div>
-                  <h3 className="text-xl font-display font-bold">League Created!</h3>
-                  <p className="text-muted-foreground">Invite your friends to join the competition</p>
+                  <h3 className="text-xl font-display font-bold">Bring in the Competition</h3>
+                  <p className="text-muted-foreground">Your scorecard is ready. Practice opens as soon as the season is scheduled, and official Week 1 starts Sunday.</p>
                 </div>
 
                 {createdLeague?.invite_code && (
                   <div className="bg-card border border-border rounded-xl p-6 text-center">
                     <p className="text-sm text-muted-foreground mb-2">Invite Code</p>
-                    <p className="text-3xl font-mono font-bold tracking-wider text-primary">
-                      {createdLeague.invite_code}
-                    </p>
+                    <p className="text-3xl font-mono font-bold tracking-wider text-primary">{createdLeague.invite_code}</p>
                     <div className="flex gap-2 mt-4 justify-center">
-                      <Button variant="outline" onClick={copyInviteCode}>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy
-                      </Button>
-                      <Button variant="outline" onClick={shareInvite}>
-                        <Share2 className="w-4 h-4 mr-2" />
-                        Share
-                      </Button>
+                      <Button variant="outline" onClick={copyInviteCode}><Copy className="w-4 h-4 mr-2" />Copy</Button>
+                      <Button variant="outline" onClick={shareInvite}><Share2 className="w-4 h-4 mr-2" />Share</Button>
                     </div>
                   </div>
                 )}
+
+                <div className="rounded-xl bg-muted/50 p-4 text-sm">
+                  <p className="font-semibold">What happens next?</p>
+                  <p className="text-muted-foreground mt-1">
+                    {isLeaderboard
+                      ? 'Once at least one other player joins, schedule the season. Preseason practice opens immediately and the official leaderboard resets to zero Sunday.'
+                      : 'Once at least one opponent joins, schedule Week 1. Everyone can practice immediately; the real matchup starts Sunday and runs through Saturday.'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <Button type="button" variant="outline" onClick={() => setStep('tasks')}>
+                    <Settings2 className="w-4 h-4 mr-2" />
+                    Customize Scorecard
+                  </Button>
+                  <p className="text-xs text-center text-muted-foreground">Optional — Classic Zrizin is already installed and ready.</p>
+                </div>
 
                 <Button onClick={finishSetup} className="w-full" size="lg">
                   Go to League

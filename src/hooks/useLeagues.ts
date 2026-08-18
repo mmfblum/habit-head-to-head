@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getLocalISODate } from '@/lib/date';
 import { useAuth } from './useAuth';
-import type { Tables, TablesInsert } from '@/integrations/supabase/types';
+import type { Tables } from '@/integrations/supabase/types';
 
 export type League = Tables<'leagues'>;
 export type LeagueMember = Tables<'league_members'>;
 export type Season = Tables<'seasons'>;
+export type LeagueGameFormat = 'head_to_head' | 'leaderboard' | 'solo';
 
 export function useUserLeagues() {
   const { user } = useAuth();
@@ -36,33 +36,43 @@ export function useCreateLeague() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ name, description }: { name: string; description?: string }) => {
+    mutationFn: async ({
+      name,
+      description,
+      gameFormat = 'head_to_head',
+    }: {
+      name: string;
+      description?: string;
+      gameFormat?: LeagueGameFormat;
+    }) => {
       if (!user) throw new Error('Must be logged in');
 
-      // Create the league
-      const { data: league, error: leagueError } = await supabase
+      const { data: leagueId, error: createError } = await supabase.rpc(
+        'create_league' as never,
+        {
+          _name: name,
+          _description: description ?? null,
+          _game_format: gameFormat,
+        } as never
+      );
+
+      if (createError) throw createError;
+      if (!leagueId) throw new Error('League creation did not return a league ID');
+
+      const { data: league, error: fetchError } = await supabase
         .from('leagues')
-        .insert({ name, description, created_by: user.id })
-        .select()
+        .select('*')
+        .eq('id', leagueId as unknown as string)
         .single();
 
-      if (leagueError) throw leagueError;
-
-      // Add user as owner
-      const { error: memberError } = await supabase
-        .from('league_members')
-        .insert({
-          league_id: league.id,
-          user_id: user.id,
-          role: 'owner',
-        });
-
-      if (memberError) throw memberError;
-
-      return league;
+      if (fetchError) throw fetchError;
+      return league as typeof league & { game_format: LeagueGameFormat };
     },
-    onSuccess: async () => {
-      // Invalidate both the exact key and base key to ensure LeagueGate updates
+    onSuccess: async (league) => {
+      if (user?.id) {
+        localStorage.setItem(`zrizin:selected-league:${user.id}`, league.id);
+        queryClient.setQueryData(['selected-league', user.id], league.id);
+      }
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
       await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
@@ -87,7 +97,6 @@ export function useCreateSeason() {
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + weeksCount * 7);
 
-      // Get the next season number
       const { data: existingSeasons } = await supabase
         .from('seasons')
         .select('season_number')
@@ -136,6 +145,15 @@ export function useConfigureSeasonTasks() {
         display_order: number;
       }>;
     }) => {
+      // Scorecard configuration is replaceable while the season is being set up.
+      // This lets league creation install Classic Zrizin automatically and still
+      // lets a commissioner customize it before kickoff without duplicate rows.
+      const { error: clearError } = await supabase
+        .from('league_task_configs')
+        .delete()
+        .eq('season_id', seasonId);
+      if (clearError) throw clearError;
+
       const configsToInsert = taskConfigs.map((config) => ({
         season_id: seasonId,
         task_template_id: config.task_template_id,
@@ -167,60 +185,30 @@ export function useJoinLeague() {
     mutationFn: async (inviteCode: string) => {
       if (!user) throw new Error('Must be logged in');
 
-      // Check if user is already in a league (single-league enforcement)
-      const { data: existingMembership } = await supabase
-        .from('league_members')
-        .select('id, leagues(name)')
-        .eq('user_id', user.id)
-        .single();
+      const { data: leagueId, error } = await supabase.rpc(
+        'join_league_by_code' as never,
+        { _invite_code: inviteCode.trim() } as never
+      );
 
-      if (existingMembership) {
-        throw new Error('You are already in a league. Leave your current league first to join another.');
-      }
+      if (error) throw error;
+      if (!leagueId) throw new Error('League join did not return a league ID');
 
-      // Find league by invite code
-      const { data: leagues, error: findError } = await supabase
+      const { data: league, error: leagueError } = await supabase
         .from('leagues')
         .select('*')
-        .eq('invite_code', inviteCode.toLowerCase().trim());
-
-      if (findError) throw findError;
-      if (!leagues || leagues.length === 0) throw new Error('Invalid invite code');
-
-      const league = leagues[0];
-
-      // Check member count
-      const { count } = await supabase
-        .from('league_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('league_id', league.id);
-
-      if (count && count >= league.max_members) {
-        throw new Error('This league is full');
-      }
-
-      // Join the league
-      const { error: joinError } = await supabase
-        .from('league_members')
-        .insert({
-          league_id: league.id,
-          user_id: user.id,
-          role: 'member',
-        });
-
-      if (joinError) {
-        // Handle unique constraint violation
-        if (joinError.code === '23505') {
-          throw new Error('You are already in a league');
-        }
-        throw joinError;
-      }
-
+        .eq('id', leagueId as unknown as string)
+        .single();
+      if (leagueError) throw leagueError;
       return league;
     },
-    onSuccess: async () => {
-      // Invalidate and refetch to ensure LeagueGate updates immediately
+    onSuccess: async (league) => {
+      if (user?.id) {
+        localStorage.setItem(`zrizin:selected-league:${user.id}`, league.id);
+        queryClient.setQueryData(['selected-league', user.id], league.id);
+      }
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+      await queryClient.invalidateQueries({ queryKey: ['league-details'] });
       await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
   });

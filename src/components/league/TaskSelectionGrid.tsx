@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Activity, Brain, Moon, BookOpen, Dumbbell, Heart, Users, Sparkles, X } from 'lucide-react';
-import { TaskTemplate } from '@/hooks/useTaskTemplates';
+import type { TaskTemplate } from '@/hooks/useTaskTemplates';
 import { Button } from '@/components/ui/button';
-import { TaskConfigurationPanel, TaskConfigOverrides } from './TaskConfigurationPanel';
-import { getConfiguredTaskName } from '@/lib/taskNaming';
+import { TaskConfigurationPanel, type TaskConfigOverrides } from './TaskConfigurationPanel';
+import { getConfiguredTaskName, getTaskScoringSentence } from '@/lib/taskNaming';
 
 interface TaskSelectionGridProps {
   groupedTemplates: Record<string, TaskTemplate[]>;
@@ -54,26 +54,16 @@ export function TaskSelectionGrid({
   const handleTaskClick = (taskId: string, template: TaskTemplate) => {
     const wasSelected = selectedTasks.has(taskId);
     onToggleTask(taskId, template);
-    
-    // Auto-expand if newly selected
-    if (!wasSelected) {
-      setExpandedTask(taskId);
-    } else {
-      // If deselecting the currently expanded task, collapse it
-      if (expandedTask === taskId) {
-        setExpandedTask(null);
-      }
-    }
+    if (wasSelected && expandedTask === taskId) setExpandedTask(null);
   };
 
   return (
     <div className="space-y-6">
-      {/* Clear All Button */}
       {selectedTasks.size > 0 && onClearAll && (
         <div className="flex justify-end">
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => {
               onClearAll();
               setExpandedTask(null);
@@ -81,7 +71,7 @@ export function TaskSelectionGrid({
             className="text-muted-foreground hover:text-destructive"
           >
             <X className="w-4 h-4 mr-1" />
-            Clear All
+            Clear selections
           </Button>
         </div>
       )}
@@ -95,7 +85,6 @@ export function TaskSelectionGrid({
             <div className="flex items-center gap-2 mb-3">
               <Icon className={`w-4 h-4 ${categoryColors[category]?.split(' ')[1] || 'text-muted-foreground'}`} />
               <h4 className="font-medium capitalize">{category}</h4>
-              <span className="text-xs text-muted-foreground">({tasks.length})</span>
             </div>
 
             <div className="grid grid-cols-1 gap-3">
@@ -103,11 +92,7 @@ export function TaskSelectionGrid({
                 const isSelected = selectedTasks.has(task.id);
                 const config = selectedTasks.get(task.id);
                 const isExpanded = expandedTask === task.id;
-
-                // Get display name based on config
-                const displayName = isSelected && config 
-                  ? getConfiguredTaskName(task, config) 
-                  : task.name;
+                const displayName = isSelected && config ? getConfiguredTaskName(task, config) : task.name;
 
                 return (
                   <motion.div
@@ -115,24 +100,20 @@ export function TaskSelectionGrid({
                     className={`relative p-4 rounded-xl border-2 transition-all ${
                       isSelected
                         ? 'border-primary bg-primary/10'
-                        : needsMore 
-                          ? 'border-border bg-card hover:border-primary/50 animate-pulse-subtle'
+                        : needsMore
+                          ? 'border-border bg-card hover:border-primary/50'
                           : 'border-border bg-card hover:border-muted-foreground/30'
                     }`}
                     layout
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleTaskClick(task.id, task)}
-                      className="w-full text-left"
-                    >
+                    <button type="button" onClick={() => handleTaskClick(task.id, task)} className="w-full text-left">
                       {isSelected && (
                         <motion.div
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
-                          className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center"
+                          className="absolute top-3 right-3 w-6 h-6 rounded-full bg-primary flex items-center justify-center"
                         >
-                          <Check className="w-3 h-3 text-primary-foreground" />
+                          <Check className="w-3.5 h-3.5 text-primary-foreground" />
                         </motion.div>
                       )}
 
@@ -140,12 +121,13 @@ export function TaskSelectionGrid({
                         <div className={`p-2 rounded-lg ${categoryColors[category] || 'bg-muted'}`}>
                           <Icon className="w-4 h-4" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate pr-6">{displayName}</p>
-                          {task.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                              {task.description}
-                            </p>
+                        <div className="flex-1 min-w-0 pr-7">
+                          <p className="font-medium truncate">{displayName}</p>
+                          {task.description && !isSelected && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{task.description}</p>
+                          )}
+                          {isSelected && config && (
+                            <p className="text-xs text-primary/90 mt-1">{getTaskScoringSentence(task, config)}</p>
                           )}
                         </div>
                       </div>

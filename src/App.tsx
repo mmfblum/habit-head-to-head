@@ -2,9 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { BottomNav } from "./components/BottomNav";
+import { NativePushPrompt } from "./components/NativePushPrompt";
 import Index from "./pages/Index";
 import Tasks from "./pages/Tasks";
 import League from "./pages/League";
@@ -16,13 +17,16 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 import CheckinDemo from "./pages/CheckinDemo";
+import Accountability from "./pages/Accountability";
 import { useUserLeagues } from "./hooks/useLeagues";
+import { useUserPrimaryLeague } from "./hooks/useLeagueDetails";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  
+  const location = useLocation();
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -30,17 +34,24 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
+
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to={`/auth${location.search}`} replace />;
   }
-  
+
   return <>{children}</>;
+}
+
+function AuthRoute() {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (!user) return <Auth />;
+  return <Navigate to={location.search ? `/${location.search}` : '/'} replace />;
 }
 
 function LeagueGate({ children }: { children: React.ReactNode }) {
   const { data: leagues, isLoading, isError, refetch } = useUserLeagues();
-  
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -48,12 +59,12 @@ function LeagueGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
+
   if (isError) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <p className="text-muted-foreground">Couldn't load your leagues</p>
-        <button 
+        <button
           onClick={() => refetch()}
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
         >
@@ -62,22 +73,42 @@ function LeagueGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
-  // If user has no leagues, show onboarding
+
   if (!leagues || leagues.length === 0) {
     return <Onboarding />;
   }
-  
+
+  return <>{children}</>;
+}
+
+function HeadToHeadOnly({ children }: { children: React.ReactNode }) {
+  const { data: league, isLoading } = useUserPrimaryLeague();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (league?.game_format && league.game_format !== 'head_to_head') {
+    return <Navigate to="/league" replace />;
+  }
+
   return <>{children}</>;
 }
 
 function AppRoutes() {
   const { user } = useAuth();
-  
+  const location = useLocation();
+  const isPublicAccountability = location.pathname.startsWith('/accountability/');
+
   return (
     <div className="min-h-screen bg-background">
       <Routes>
-        <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
+        <Route path="/auth" element={<AuthRoute />} />
+        <Route path="/accountability/:token" element={<Accountability />} />
         <Route
           path="/"
           element={
@@ -113,7 +144,9 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <LeagueGate>
-                <Matchup />
+                <HeadToHeadOnly>
+                  <Matchup />
+                </HeadToHeadOnly>
               </LeagueGate>
             </ProtectedRoute>
           }
@@ -154,7 +187,8 @@ function AppRoutes() {
         />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {user && <BottomNav />}
+      {user && !isPublicAccountability && <NativePushPrompt />}
+      {user && !isPublicAccountability && <BottomNav />}
     </div>
   );
 }
