@@ -51,8 +51,10 @@ select
   25,
   jsonb_build_object('source','manual')
 from public.task_instances ti
+join public.league_task_configs ltc on ltc.id=ti.league_task_config_id
+join public.task_templates tt on tt.id=ltc.task_template_id
 where ti.season_id=(select id from public.seasons where league_id=(select id from public.leagues where created_by='77777777-7777-4777-8777-777777777777'))
-  and ti.task_name='Reading';
+  and tt.name='Reading';
 
 create temporary table reading_score_before as
 select se.id as event_id, se.points_awarded, se.is_reversed, dc.id as checkin_id
