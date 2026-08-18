@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { TaskTemplate } from '@/hooks/useTaskTemplates';
 import { getInitialConfig, type TaskConfigOverrides } from './TaskConfigurationPanel';
-import { getTaskScoringSentence } from '@/lib/taskNaming';
+import { getConfiguredTaskName, getTaskScoringSentence } from '@/lib/taskNaming';
 
 export interface CustomChallengeValue {
   templateId: string;
@@ -15,6 +15,7 @@ interface CustomChallengeBuilderProps {
   templates: TaskTemplate[];
   value?: CustomChallengeValue;
   onChange: (value: CustomChallengeValue | undefined) => void;
+  idPrefix?: string;
 }
 
 type ChallengeMode = 'checkoff' | 'minutes' | 'count';
@@ -35,24 +36,29 @@ function templateForMode(templates: TaskTemplate[], mode: ChallengeMode) {
   return templates.find((template) => getMode(template) === mode);
 }
 
-export function CustomChallengeBuilder({ templates, value, onChange }: CustomChallengeBuilderProps) {
+export function createDefaultCustomChallenge(templates: TaskTemplate[]): CustomChallengeValue | undefined {
+  const template = templateForMode(templates, 'checkoff') ?? templates[0];
+  if (!template) return undefined;
+  return {
+    templateId: template.id,
+    config: {
+      ...getInitialConfig(template),
+      custom_name: '',
+      custom_description: '',
+      scoring_mode: 'binary',
+      binary_points: 3,
+    },
+  };
+}
+
+export function CustomChallengeBuilder({ templates, value, onChange, idPrefix = 'custom-challenge' }: CustomChallengeBuilderProps) {
   const selectedTemplate = value ? templates.find((template) => template.id === value.templateId) : undefined;
   const config = value?.config;
   const selectedMode = selectedTemplate ? getMode(selectedTemplate) : 'checkoff';
 
   const startChallenge = () => {
-    const template = templateForMode(templates, 'checkoff') ?? templates[0];
-    if (!template) return;
-    onChange({
-      templateId: template.id,
-      config: {
-        ...getInitialConfig(template),
-        custom_name: '',
-        custom_description: '',
-        scoring_mode: 'binary',
-        binary_points: 3,
-      },
-    });
+    const next = createDefaultCustomChallenge(templates);
+    if (next) onChange(next);
   };
 
   const setMode = (mode: ChallengeMode) => {
@@ -88,22 +94,14 @@ export function CustomChallengeBuilder({ templates, value, onChange }: CustomCha
           <div className="flex-1">
             <p className="font-semibold">Make it yours</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Create a league-specific task—religious study, language practice, no dessert, anything you care about.
+              Create a custom task—religious study, language practice, no dessert, pushups, anything you care about.
             </p>
-            <div className="flex flex-wrap gap-2 mt-3 text-xs text-muted-foreground">
-              <span className="rounded-full bg-background px-2 py-1">Religious study</span>
-              <span className="rounded-full bg-background px-2 py-1">Spanish practice</span>
-              <span className="rounded-full bg-background px-2 py-1">No junk food</span>
-            </div>
           </div>
         </div>
         <Button type="button" variant="secondary" className="w-full mt-4" onClick={startChallenge} disabled={templates.length === 0}>
           <Sparkles className="w-4 h-4 mr-2" />
-          Create a custom task
+          Add Custom Task
         </Button>
-        {templates.length === 0 && (
-          <p className="text-xs text-muted-foreground mt-2 text-center">Custom challenge templates are not installed in this database yet.</p>
-        )}
       </div>
     );
   }
@@ -111,6 +109,7 @@ export function CustomChallengeBuilder({ templates, value, onChange }: CustomCha
   const target = selectedMode === 'minutes'
     ? Number(config.threshold ?? 20)
     : Number(config.threshold ?? config.target ?? 1);
+  const configuredName = getConfiguredTaskName(selectedTemplate, config);
 
   return (
     <div className="rounded-2xl border border-secondary/40 bg-secondary/5 p-4 space-y-4">
@@ -118,22 +117,22 @@ export function CustomChallengeBuilder({ templates, value, onChange }: CustomCha
         <div>
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-secondary" />
-            <p className="font-semibold">Custom Task</p>
+            <p className="font-semibold">{config.custom_name?.trim() ? configuredName : 'Custom Task'}</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Everyone competes on this same custom goal.</p>
+          <p className="text-xs text-muted-foreground mt-1">Choose exactly what counts for this daily goal.</p>
         </div>
-        <Button type="button" variant="ghost" size="icon" onClick={() => onChange(undefined)} className="h-8 w-8">
+        <Button type="button" variant="ghost" size="icon" onClick={() => onChange(undefined)} className="h-8 w-8" aria-label="Remove custom task">
           <X className="w-4 h-4" />
         </Button>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="custom-challenge-name">What should players see?</Label>
+        <Label htmlFor={`${idPrefix}-name`}>Task name</Label>
         <Input
-          id="custom-challenge-name"
+          id={`${idPrefix}-name`}
           value={config.custom_name ?? ''}
           onChange={(event) => update({ custom_name: event.target.value })}
-          placeholder="e.g. Daily Torah Study"
+          placeholder="e.g. Pushups"
           maxLength={50}
         />
       </div>
@@ -167,33 +166,36 @@ export function CustomChallengeBuilder({ templates, value, onChange }: CustomCha
 
       {selectedMode !== 'checkoff' && (
         <div className="space-y-2">
-          <Label htmlFor="custom-challenge-target">Daily goal</Label>
+          <Label htmlFor={`${idPrefix}-target`}>Daily goal</Label>
           <div className="flex items-center gap-2">
             <Input
-              id="custom-challenge-target"
+              id={`${idPrefix}-target`}
               type="number"
               min={1}
               value={target}
               onChange={(event) => update({ threshold: Math.max(1, Number(event.target.value) || 1) })}
             />
-            <span className="text-sm text-muted-foreground w-20">{selectedMode === 'minutes' ? 'minutes' : 'times'}</span>
+            <span className="text-sm text-muted-foreground w-20">{selectedMode === 'minutes' ? 'minutes' : 'reps/count'}</span>
           </div>
+          {config.custom_name?.trim() && (
+            <p className="text-xs font-semibold text-primary">This task will appear as “{configuredName}”.</p>
+          )}
         </div>
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="custom-challenge-description">Short note (optional)</Label>
+        <Label htmlFor={`${idPrefix}-description`}>Short note (optional)</Label>
         <Input
-          id="custom-challenge-description"
+          id={`${idPrefix}-description`}
           value={config.custom_description ?? ''}
           onChange={(event) => update({ custom_description: event.target.value })}
-          placeholder="What exactly should everyone do?"
+          placeholder="What exactly should count?"
           maxLength={100}
         />
       </div>
 
       <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Players will understand it as</p>
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Scoring</p>
         <p className="text-sm font-medium">{getTaskScoringSentence(selectedTemplate, config)}</p>
       </div>
     </div>
