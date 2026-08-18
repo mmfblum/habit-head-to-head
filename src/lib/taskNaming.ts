@@ -43,19 +43,34 @@ function defaultNumber(template: TaskTemplate, ...keys: string[]): number | unde
   return undefined;
 }
 
-export function getConfiguredTaskName(template: TaskTemplate, config: TaskConfigForNaming): string {
-  const customName = config.custom_name?.trim();
-  if (customName) return customName;
+function formatQuantityName(baseName: string, template: TaskTemplate, target: number): string {
+  const amount = target.toLocaleString();
+  switch (template.unit) {
+    case 'count': return `${amount} ${baseName}`;
+    case 'steps': return `${amount} ${baseName.toLowerCase().includes('step') ? baseName : `steps ${baseName}`}`;
+    case 'minutes': return `${amount} min ${baseName}`;
+    case 'hours': return `${amount} hr ${baseName}`;
+    case 'pages': return `${amount} pages ${baseName}`;
+    case 'words': return `${amount} words ${baseName}`;
+    case 'miles': return `${amount} mi ${baseName}`;
+    case 'calories': return `${amount} cal ${baseName}`;
+    default: return `${amount} ${baseName}`;
+  }
+}
 
-  const baseName = template.name;
-  const unit = getUnitLabel(template);
+export function getConfiguredTaskName(template: TaskTemplate, config: TaskConfigForNaming): string {
+  const baseName = config.custom_name?.trim() || template.name;
 
   if (config.target_time && (template.unit === 'bedtime_time' || template.unit === 'waketime_time')) {
     return `${baseName} by ${formatTime(config.target_time)}`;
   }
 
-  if (config.target && config.target > 0 && unit) return `${baseName} · ${config.target.toLocaleString()} ${unit}`;
-  if (config.threshold && config.threshold > 0 && unit) return `${baseName} · ${config.threshold.toLocaleString()} ${unit}`;
+  if (config.daily_limit_minutes !== undefined && config.daily_limit_minutes > 0) {
+    return `${baseName} ≤ ${config.daily_limit_minutes.toLocaleString()} min`;
+  }
+
+  const target = config.target ?? config.threshold;
+  if (target !== undefined && target > 0) return formatQuantityName(baseName, template, target);
   return baseName;
 }
 
