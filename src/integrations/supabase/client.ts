@@ -2,11 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
+// Review builds fall back to the isolated Zrizin test project because some
+// browser sandboxes and debug APK builds do not carry Vite env files through.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://nerghgtquntgdjrcjucb.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_JD2SFAtqFmIcYq09sC4uOQ_nqMHDjKL';
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
