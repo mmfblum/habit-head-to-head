@@ -5,7 +5,6 @@ import { Progress } from '@/components/ui/progress';
 import { ChevronLeft, ChevronRight, Calendar, Eye, Flag, ListFilter, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DailyCheckinList } from '@/components/checkin';
-import { FinishMyCard, countFinishableTasks } from '@/components/checkin/FinishMyCard';
 import { DeviceSyncCard } from '@/components/integrations/DeviceSyncCard';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
@@ -20,7 +19,6 @@ export default function Tasks() {
   const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [finishCardOpen, setFinishCardOpen] = useState(false);
 
   const currentSeasonId = leagueDetails?.current_season?.id;
   const seasonStatus = leagueDetails?.current_season?.status;
@@ -45,7 +43,6 @@ export default function Tasks() {
   const loggedCount = countedForProgress.length;
   const scoringChancesLeft = tasks.filter((task) => !task.todayCheckin).length;
   const progress = loggedCount > 0 ? (completedCount / loggedCount) * 100 : 0;
-  const finishableCount = countFinishableTasks(tasks);
 
   const goToPreviousDay = () => setSelectedDate((previous) => {
     const next = new Date(previous);
@@ -100,17 +97,11 @@ export default function Tasks() {
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Zap className="w-3 h-3" />
                   {scoringChancesLeft === 0 && tasks.length > 0
-                    ? 'Perfect card — everything scored.'
-                    : `${scoringChancesLeft} scoring chance${scoringChancesLeft === 1 ? '' : 's'} left`}
+                    ? 'Everything logged today.'
+                    : `${scoringChancesLeft} task${scoringChancesLeft === 1 ? '' : 's'} still open`}
                 </span>
                 <span className="score-text text-sm text-primary">{Math.round(progress)}%</span>
               </div>
-              {isToday && finishableCount >= 2 && (
-                <Button variant="outline" className="w-full mt-3 h-9 gap-2" onClick={() => setFinishCardOpen(true)}>
-                  <Zap className="w-3.5 h-3.5 text-secondary" />
-                  Finish My Card · {finishableCount} quick decisions
-                </Button>
-              )}
             </div>
           )}
         </div>
@@ -217,8 +208,6 @@ export default function Tasks() {
           <div className="text-center py-12 text-muted-foreground"><p className="text-sm">This scoring week is closed.</p></div>
         )}
       </main>
-
-      <FinishMyCard tasks={tasks} open={finishCardOpen} onOpenChange={setFinishCardOpen} />
     </div>
   );
 }
