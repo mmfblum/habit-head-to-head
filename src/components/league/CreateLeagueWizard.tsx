@@ -15,7 +15,7 @@ import { TaskSelectionGrid } from './TaskSelectionGrid';
 import { type TaskConfigOverrides, getInitialConfig } from './TaskConfigurationPanel';
 import { DifficultyQuickStart, type StarterPackId, STARTER_PACKS } from './DifficultyQuickStart';
 import { TaskSummaryPreview } from './TaskSummaryPreview';
-import { CustomChallengeBuilder, type CustomChallengeValue } from './CustomChallengeBuilder';
+import { CustomTaskListBuilder, type CustomTaskEntry } from './CustomTaskListBuilder';
 
 type WizardStep = 'details' | 'tasks' | 'invite';
 
@@ -53,6 +53,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     gameFormat: 'head_to_head',
   });
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
+  const [customTasks, setCustomTasks] = useState<CustomTaskEntry[]>([]);
   const [defaultPackLoaded, setDefaultPackLoaded] = useState(false);
   const [createdLeague, setCreatedLeague] = useState<{ id: string; invite_code: string | null } | null>(null);
   const [createdSeason, setCreatedSeason] = useState<{ id: string } | null>(null);
@@ -87,10 +88,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     return result;
   }, [groupedTemplates, customTemplateIds]);
 
-  const customChallengeValue = useMemo<CustomChallengeValue | undefined>(() => {
-    const entry = Array.from(taskConfigs.entries()).find(([taskId]) => customTemplateIds.has(taskId));
-    return entry ? { templateId: entry[0], config: entry[1] } : undefined;
-  }, [taskConfigs, customTemplateIds]);
+  const taskCount = taskConfigs.size + customTasks.length;
 
   const buildStarterPack = useCallback((packId: StarterPackId) => {
     const pack = STARTER_PACKS[packId];
@@ -191,53 +189,48 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     });
   };
 
-  const handleCustomChallenge = (value: CustomChallengeValue | undefined) => {
-    setTaskConfigs((previous) => {
-      const next = new Map(previous);
-      customTemplateIds.forEach((templateId) => next.delete(templateId));
-      if (value) next.set(value.templateId, value.config);
-      return next;
-    });
+  const handleClearAll = () => {
+    setTaskConfigs(new Map());
+    setCustomTasks([]);
   };
-
-  const handleClearAll = () => setTaskConfigs(new Map());
 
   const handleQuickStart = (packId: StarterPackId) => {
     if (!groupedTemplates) return;
     const next = buildStarterPack(packId);
-
-    if (customChallengeValue) {
-      next.set(customChallengeValue.templateId, customChallengeValue.config);
-    }
-
     setTaskConfigs(next);
     setDefaultPackLoaded(true);
-    toast.success(`${STARTER_PACKS[packId].label} loaded with ${next.size} daily scoring chances.`);
+    toast.success(`${STARTER_PACKS[packId].label} loaded. Your custom tasks stayed in place.`);
   };
 
   const handleTasksSubmit = async () => {
-    if (taskConfigs.size < 3) {
+    if (taskCount < 3) {
       toast.error('Choose at least 3 daily scoring tasks');
       return;
     }
 
-    if (customChallengeValue && !customChallengeValue.config.custom_name?.trim()) {
-      toast.error('Give your custom challenge a name');
+    const unnamedCustomTask = customTasks.find((entry) => !entry.value.config.custom_name?.trim());
+    if (unnamedCustomTask) {
+      toast.error('Give every custom task a name');
       return;
     }
 
     if (!createdSeason) return;
 
     try {
-      const taskConfigArray = Array.from(taskConfigs.entries()).map(([taskId, config], index) => ({
+      const standardConfigs = Array.from(taskConfigs.entries()).map(([taskId, config], index) => ({
         task_template_id: taskId,
         display_order: index,
         config_overrides: serializeConfig(config),
       }));
+      const customConfigs = customTasks.map((entry, index) => ({
+        task_template_id: entry.value.templateId,
+        display_order: standardConfigs.length + index,
+        config_overrides: serializeConfig(entry.value.config),
+      }));
 
       await configureTasks.mutateAsync({
         seasonId: createdSeason.id,
-        taskConfigs: taskConfigArray,
+        taskConfigs: [...standardConfigs, ...customConfigs],
       });
 
       if (formData.gameFormat === 'solo') {
@@ -467,18 +460,18 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                       <p className="text-xs mt-2">{isSolo ? 'Build your streaks' : isLeaderboard ? 'Climb the board' : 'Weekly total wins'}</p>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-3">Want extra steps or minutes to matter? Open “Goal & scoring” on any task and switch it to Performance.</p>
+                  <p className="text-xs text-muted-foreground mt-3">When you change a quantity, the task name changes too—for example, Pushups set to 30 becomes “30 Pushups.”</p>
                 </div>
 
                 <div className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors ${
-                  taskConfigs.size >= 3 ? 'bg-primary/10 border-primary/30' : 'bg-muted/50 border-border'
+                  taskCount >= 3 ? 'bg-primary/10 border-primary/30' : 'bg-muted/50 border-border'
                 }`}>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Daily scoring chances: {taskConfigs.size}</span>
-                    {taskConfigs.size >= 3 && <Check className="w-4 h-4 text-primary" />}
+                    <span className="font-medium">Daily scoring chances: {taskCount}</span>
+                    {taskCount >= 3 && <Check className="w-4 h-4 text-primary" />}
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {taskConfigs.size < 3 ? `Pick ${3 - taskConfigs.size} more` : 'Game ready'}
+                    {taskCount < 3 ? `Pick ${3 - taskCount} more` : 'Game ready'}
                   </span>
                 </div>
 
@@ -486,20 +479,20 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
                 <section className="space-y-3">
                   <div>
-                    <h4 className="font-display font-semibold">{isSolo ? 'Your signature challenge' : 'Your league’s signature challenge'}</h4>
-                    <p className="text-xs text-muted-foreground mt-1">{isSolo ? 'Optional — add something specific to the person you want to become.' : 'Optional, but this is where a league starts to feel like your league.'}</p>
+                    <h4 className="font-display font-semibold">Custom tasks</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Add as many as you want. Each one can be a checkoff, minutes goal, or count/reps goal.</p>
                   </div>
-                  <CustomChallengeBuilder
+                  <CustomTaskListBuilder
                     templates={customChallengeTemplates}
-                    value={customChallengeValue}
-                    onChange={handleCustomChallenge}
+                    values={customTasks}
+                    onChange={setCustomTasks}
                   />
                 </section>
 
                 <section className="space-y-3">
                   <div>
                     <h4 className="font-display font-semibold">Choose the core tasks</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Tap a task to add it. Open “Goal & scoring” only if you want to change the default.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Tap a task to add it. Open “Goal & scoring” to change the target; the task title updates with the new quantity.</p>
                   </div>
                   {tasksLoading ? (
                     <div className="text-center py-8 text-muted-foreground">Loading tasks...</div>
@@ -515,16 +508,16 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   )}
                 </section>
 
-                {taskConfigs.size >= 3 && (
-                  <TaskSummaryPreview templates={allTemplates} configs={taskConfigs} />
+                {taskCount >= 3 && (
+                  <TaskSummaryPreview templates={allTemplates} configs={taskConfigs} customTasks={customTasks} />
                 )}
 
                 <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-background via-background to-transparent">
-                  <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskConfigs.size < 3 || configureTasks.isPending || startSeason.isPending}>
+                  <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskCount < 3 || configureTasks.isPending || startSeason.isPending}>
                     {configureTasks.isPending || startSeason.isPending ? 'Saving game...' : isSolo ? 'Start My Solo Season' : 'Use This Scorecard & Invite Friends'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
-                  {taskConfigs.size < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}
+                  {taskCount < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}
                 </div>
               </motion.div>
             )}
