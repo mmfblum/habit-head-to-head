@@ -32,7 +32,7 @@ export function BottomNav() {
               className={`nav-item flex-1 ${isActive ? 'nav-item-active' : 'nav-item-inactive'}`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
-              <span className="text-[10px] font-medium">{isSolo && item.path === '/league' ? 'Progress' : item.label}</span>
+              <span className="text-[10px] font-medium">{isSolo && item.path === '/league' ? 'Stats' : item.label}</span>
             </button>
           );
         })}
