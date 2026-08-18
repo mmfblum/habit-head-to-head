@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getTaskGoalTarget, isTaskGoalMet } from '@/lib/taskProgress';
+import { getManualGoalCheckinValue, getTaskGoalTarget, isTaskGoalMet } from '@/lib/taskProgress';
 import type { TaskWithTemplate } from '@/types/checkin';
 
 function task(overrides: Partial<TaskWithTemplate>): TaskWithTemplate {
@@ -48,6 +48,30 @@ describe('task goal evaluation', () => {
       ...underLimit,
       todayCheckin: { ...underLimit.todayCheckin!, numeric_value: 150 },
     })).toBe(false);
+  });
+
+  it('creates correct one-tap values for a lower-is-better manual fallback', () => {
+    const screenTime = task({
+      task_name: 'Screen Time ≤ 120 min',
+      input_type: 'numeric',
+      scoring_type: 'tiered',
+      config: { daily_limit_minutes: 120, target: 120 },
+    });
+
+    expect(getManualGoalCheckinValue(screenTime, true)).toEqual({ numeric_value: 120 });
+    expect(getManualGoalCheckinValue(screenTime, false)).toEqual({ numeric_value: 121 });
+  });
+
+  it('creates correct one-tap values for Steps manual fallback', () => {
+    const steps = task({
+      task_name: '10,000 Steps',
+      input_type: 'numeric',
+      scoring_type: 'linear_per_unit',
+      config: { target: 10000, unit_size: 1000 },
+    });
+
+    expect(getManualGoalCheckinValue(steps, true)).toEqual({ numeric_value: 10000 });
+    expect(getManualGoalCheckinValue(steps, false)).toEqual({ numeric_value: 0 });
   });
 
   it('treats a normal numeric target as value-at-or-above goal', () => {
