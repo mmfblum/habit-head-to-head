@@ -1,4 +1,4 @@
-import type { TaskWithTemplate } from '@/types/checkin';
+import type { CheckinValue, TaskWithTemplate } from '@/types/checkin';
 
 function asConfig(task: TaskWithTemplate): Record<string, unknown> {
   return (task.config || {}) as Record<string, unknown>;
@@ -31,6 +31,32 @@ export function getTaskGoalTarget(task: TaskWithTemplate): number {
     'target',
     'threshold'
   ) ?? 1;
+}
+
+/**
+ * Convert a one-tap Done/Missed choice into a valid raw check-in value.
+ * This keeps manually scored integration tasks on the same scoring engine as
+ * exact/manual and future device-import values.
+ */
+export function getManualGoalCheckinValue(
+  task: TaskWithTemplate,
+  hitGoal: boolean
+): CheckinValue | null {
+  const config = asConfig(task);
+  const dailyLimit = numericConfig(config, 'daily_limit_minutes');
+  const target = dailyLimit ?? numericConfig(config, 'target', 'threshold');
+  if (target === undefined) return null;
+
+  const missStep = Math.max(1, numericConfig(config, 'unit_size') ?? 1);
+  const rawValue = hitGoal
+    ? target
+    : dailyLimit !== undefined
+      ? target + missStep
+      : 0;
+
+  if (task.input_type === 'duration') return { duration_minutes: rawValue };
+  if (task.input_type === 'numeric') return { numeric_value: rawValue };
+  return null;
 }
 
 export function isTaskGoalMet(task: TaskWithTemplate): boolean {
