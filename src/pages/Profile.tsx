@@ -101,7 +101,7 @@ export default function Profile() {
     setIsSaving(false);
 
     if (error) {
-      toast.error('Failed to save profile');
+      toast.error('Failed to save team identity');
       return;
     }
 
@@ -114,7 +114,7 @@ export default function Profile() {
     setDisplayName(normalized.display_name ?? '');
     setAvatarUrl(normalized.avatar_url ?? '');
     setIsEditing(false);
-    toast.success('Player identity updated');
+    toast.success('Team identity updated');
   };
 
   const handleSignOut = async () => {
@@ -125,6 +125,8 @@ export default function Profile() {
   const isOwner = currentMember?.role === 'owner';
   const isMember = !!currentMember;
   const isLeaderboard = league?.game_format === 'leaderboard';
+  const isSolo = league?.game_format === 'solo';
+  const formatLabel = isSolo ? 'Solo' : isLeaderboard ? 'Leaderboard' : 'Head-to-Head';
   const avatarDisplay = profile?.avatar_url || profile?.display_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || '👤';
   const isAvatarUrl = avatarDisplay.startsWith('http://') || avatarDisplay.startsWith('https://');
   const weeklySorted = [...(league?.members ?? [])].sort((a, b) => b.weekly_points - a.weekly_points);
@@ -133,59 +135,74 @@ export default function Profile() {
     ? weeklySorted.findIndex((member) => member.weekly_points === weeklySorted[weeklyIndex].weekly_points) + 1
     : undefined;
 
-  const statCards = isLeaderboard
+  const statCards = isSolo
     ? [
         {
-          icon: Trophy,
-          label: 'Season Rank',
-          value: currentMember?.current_rank ? `#${currentMember.current_rank}` : '—',
-          subtext: league ? `of ${league.members.length}` : 'No league',
-        },
-        {
-          icon: ListOrdered,
-          label: 'Weekly Rank',
-          value: weeklyRank ? `#${weeklyRank}` : '—',
-          subtext: league ? `of ${league.members.length}` : 'No league',
-        },
-        {
           icon: Target,
-          label: 'Week Raw Points',
+          label: 'Week Points',
           value: currentMember?.weekly_points?.toLocaleString() ?? '0',
-          subtext: 'Current weekly race',
+          subtext: 'This tracking week',
         },
         {
           icon: Award,
-          label: 'Championship Points',
-          value: currentMember?.championship_points?.toLocaleString() ?? '0',
-          subtext: `${currentMember?.total_points?.toLocaleString() ?? '0'} raw season pts`,
-        },
-      ]
-    : [
-        {
-          icon: Trophy,
-          label: 'Season Rank',
-          value: currentMember?.current_rank ? `#${currentMember.current_rank}` : '—',
-          subtext: league ? `of ${league.members.length}` : 'No league',
-        },
-        {
-          icon: Award,
-          label: 'Record',
-          value: currentMember ? `${currentMember.wins}-${currentMember.losses}${currentMember.ties ? `-${currentMember.ties}` : ''}` : '—',
-          subtext: currentMember?.ties ? 'W-L-T' : 'W-L',
-        },
-        {
-          icon: Flame,
-          label: 'Streak',
-          value: currentMember?.current_streak ? `${currentMember.current_streak}${currentMember.streak_type || ''}` : '—',
-          subtext: currentMember?.streak_type === 'W' ? 'Winning streak' : currentMember?.streak_type === 'L' ? 'Losing streak' : 'No streak',
-        },
-        {
-          icon: Target,
           label: 'Season Points',
           value: currentMember?.total_points?.toLocaleString() ?? '0',
-          subtext: `${currentMember?.weekly_points?.toLocaleString() ?? '0'} this week`,
+          subtext: 'All Solo scoring',
         },
-      ];
+      ]
+    : isLeaderboard
+      ? [
+          {
+            icon: Trophy,
+            label: 'Season Rank',
+            value: currentMember?.current_rank ? `#${currentMember.current_rank}` : '—',
+            subtext: league ? `of ${league.members.length}` : 'No league',
+          },
+          {
+            icon: ListOrdered,
+            label: 'Weekly Rank',
+            value: weeklyRank ? `#${weeklyRank}` : '—',
+            subtext: league ? `of ${league.members.length}` : 'No league',
+          },
+          {
+            icon: Target,
+            label: 'Week Raw Points',
+            value: currentMember?.weekly_points?.toLocaleString() ?? '0',
+            subtext: 'Current weekly race',
+          },
+          {
+            icon: Award,
+            label: 'Championship Points',
+            value: currentMember?.championship_points?.toLocaleString() ?? '0',
+            subtext: `${currentMember?.total_points?.toLocaleString() ?? '0'} raw season pts`,
+          },
+        ]
+      : [
+          {
+            icon: Trophy,
+            label: 'Season Rank',
+            value: currentMember?.current_rank ? `#${currentMember.current_rank}` : '—',
+            subtext: league ? `of ${league.members.length}` : 'No league',
+          },
+          {
+            icon: Award,
+            label: 'Record',
+            value: currentMember ? `${currentMember.wins}-${currentMember.losses}${currentMember.ties ? `-${currentMember.ties}` : ''}` : '—',
+            subtext: currentMember?.ties ? 'W-L-T' : 'W-L',
+          },
+          {
+            icon: Flame,
+            label: 'Streak',
+            value: currentMember?.current_streak ? `${currentMember.current_streak}${currentMember.streak_type || ''}` : '—',
+            subtext: currentMember?.streak_type === 'W' ? 'Winning streak' : currentMember?.streak_type === 'L' ? 'Losing streak' : 'No streak',
+          },
+          {
+            icon: Target,
+            label: 'Season Points',
+            value: currentMember?.total_points?.toLocaleString() ?? '0',
+            subtext: `${currentMember?.weekly_points?.toLocaleString() ?? '0'} this week`,
+          },
+        ];
 
   if (isLoadingProfile || leagueLoading) {
     return (
@@ -214,7 +231,7 @@ export default function Profile() {
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border safe-top">
         <div className="px-4 py-3 flex items-center justify-between">
           <h1 className="font-display font-bold text-xl">Profile</h1>
-          <Button variant="ghost" size="icon" onClick={() => setIsEditing((previous) => !previous)}>
+          <Button variant="ghost" size="icon" onClick={() => setIsEditing((previous) => !previous)} aria-label="Customize team">
             <Settings className="w-5 h-5" />
           </Button>
         </div>
@@ -228,20 +245,24 @@ export default function Profile() {
         >
           <div className="w-24 h-24 rounded-3xl bg-primary/15 flex items-center justify-center text-4xl overflow-hidden ring-1 ring-primary/20">
             {isAvatarUrl ? (
-              <img src={avatarDisplay} alt={profile?.display_name || 'Profile'} className="w-full h-full object-cover" />
+              <img src={avatarDisplay} alt={profile?.display_name || 'Team'} className="w-full h-full object-cover" />
             ) : (
               <span>{avatarDisplay}</span>
             )}
           </div>
           <h2 className="font-display font-bold text-2xl mt-4">
-            {profile?.display_name || 'Set your name'}
+            {profile?.display_name || 'Name your team'}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">{user?.email}</p>
           {league && (
             <p className="text-xs text-primary font-medium mt-2">
-              {league.name} • {isLeaderboard ? 'Leaderboard' : 'Head-to-Head'} • {currentMember?.role || 'member'}
+              {league.name} • {formatLabel} • {currentMember?.role || 'member'}
             </p>
           )}
+          <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => setIsEditing(true)}>
+            <Settings className="w-4 h-4" />
+            Customize Team
+          </Button>
         </motion.section>
 
         {isEditing && (
@@ -251,20 +272,21 @@ export default function Profile() {
             className="card-elevated rounded-xl p-4 space-y-5"
           >
             <div className="space-y-2">
-              <Label htmlFor="display-name">Player name</Label>
+              <Label htmlFor="display-name">Team name</Label>
               <Input
                 id="display-name"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Your name"
+                placeholder="The Early Birds"
                 maxLength={40}
               />
+              <p className="text-[11px] text-muted-foreground">This is the name opponents and league members will see.</p>
             </div>
 
             <div className="space-y-2">
               <div>
-                <Label>Choose your mascot</Label>
-                <p className="text-xs text-muted-foreground mt-1">Pick the identity your opponents will see all season.</p>
+                <Label>Choose your team icon</Label>
+                <p className="text-xs text-muted-foreground mt-1">Pick the mascot or symbol that represents you in the game.</p>
               </div>
               <div className="grid grid-cols-8 gap-2">
                 {MASCOTS.map((mascot) => (
@@ -293,11 +315,10 @@ export default function Profile() {
                 onChange={(event) => setAvatarUrl(event.target.value)}
                 placeholder="https://..."
               />
-              <p className="text-[11px] text-muted-foreground">Photo upload can be added once the native app shell is in place.</p>
             </div>
             <div className="flex gap-2">
               <Button onClick={handleSave} disabled={isSaving} className="flex-1">
-                {isSaving ? 'Saving...' : 'Save Identity'}
+                {isSaving ? 'Saving...' : 'Save Team'}
               </Button>
               <Button
                 variant="outline"
@@ -368,10 +389,12 @@ export default function Profile() {
         {league && isMember && (
           <section className="card-elevated rounded-xl p-4 space-y-4">
             <div>
-              <p className="font-semibold text-sm">League Membership</p>
+              <p className="font-semibold text-sm">{isSolo ? 'Solo Membership' : 'League Membership'}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isOwner
-                  ? 'As owner, you can delete the league if you want to end it for everyone.'
+                  ? isSolo
+                    ? 'You can delete this Solo season and its score history if you want to start over.'
+                    : 'As owner, you can delete the league if you want to end it for everyone.'
                   : isLeaderboard
                     ? 'Leaving removes you from this leaderboard and future scoring weeks.'
                     : 'Leaving removes you from the league and future matchups.'}
@@ -384,14 +407,14 @@ export default function Profile() {
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" className="w-full gap-2">
                     <Trash2 className="w-4 h-4" />
-                    Delete League
+                    {isSolo ? 'Delete Solo' : 'Delete League'}
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete {league.name}?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This permanently deletes the league, its season, standings, scores, tasks, and check-in history for everyone. This cannot be undone.
+                      This permanently deletes the league, its season, standings, scores, tasks, and check-in history. This cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -400,7 +423,7 @@ export default function Profile() {
                       onClick={() => deleteLeague.mutate(league.id)}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      {deleteLeague.isPending ? 'Deleting...' : 'Delete League'}
+                      {deleteLeague.isPending ? 'Deleting...' : isSolo ? 'Delete Solo' : 'Delete League'}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
