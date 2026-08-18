@@ -19,6 +19,7 @@ import { addDays, format, parseISO } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';
+import { SoloStatsDashboard } from '@/components/solo/SoloStatsDashboard';
 import { PunishmentSettingsCard } from '@/components/league/PunishmentSettingsCard';
 import { LeaderboardConsequenceCard } from '@/components/leaderboard/LeaderboardConsequenceCard';
 
@@ -71,6 +72,7 @@ export default function League() {
   const isScheduledWeek = isActive && weekPhase === 'scheduled';
   const isLiveWeek = isActive && weekPhase === 'live';
   const enabledTaskCount = taskConfigs?.filter((config) => config.is_enabled).length ?? 0;
+  const currentMember = league.members.find((member) => member.user_id === user?.id);
 
   const sortedMembers = [...league.members].sort((a, b) => {
     if (isLeaderboard) {
@@ -185,6 +187,16 @@ export default function League() {
 
       <main className="px-4 py-4 space-y-6">
         {isSolo && <AccountabilityShareCard leagueId={league.id} />}
+        {isSolo && isActive && currentSeason && currentWeek && user?.id && (
+          <SoloStatsDashboard
+            seasonId={currentSeason.id}
+            userId={user.id}
+            seasonStart={currentSeason.start_date}
+            weekStart={currentWeek.start_date}
+            weekEnd={currentWeek.end_date}
+            weekPoints={currentMember?.weekly_points ?? 0}
+          />
+        )}
         {!isSolo && <PunishmentSettingsCard leagueId={league.id} isAdmin={!!isAdmin} />}
         {!currentSeason && (
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card-elevated rounded-xl p-6 text-center">
@@ -274,7 +286,9 @@ export default function League() {
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isLeaderboard
                     ? 'The board opens Sunday. Everyone scores the same daily game and races for #1.'
-                    : 'The matchups are locked in. Scoring, power plays, and taunts open Sunday.'}
+                    : isSolo
+                      ? 'Your next Solo tracking week is scheduled.'
+                      : 'The matchups are locked in. Scoring, power plays, and taunts open Sunday.'}
                 </p>
               </div>
             </div>
@@ -397,33 +411,33 @@ export default function League() {
         )}
 
         {!isSolo && (
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <Trophy className="w-4 h-4 text-pending" />
-            <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-              {isActive ? (isLeaderboard ? 'Season Championship' : 'Season Standings') : 'League Members'}
-            </h2>
-          </div>
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Trophy className="w-4 h-4 text-pending" />
+              <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                {isActive ? (isLeaderboard ? 'Season Championship' : 'Season Standings') : 'League Members'}
+              </h2>
+            </div>
 
-          {sortedMembers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No members yet. Share the invite code to add members.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {sortedMembers.map((member, index) => (
-                <LeaderboardRow
-                  key={member.id}
-                  user={memberToUser(member, index)}
-                  index={index}
-                  isCurrentUser={member.user_id === user?.id}
-                  isLowestScorer={!!lowestScorer && member.user_id === lowestScorer.user_id}
-                  competitionFormat={league.game_format}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+            {sortedMembers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No members yet. Share the invite code to add members.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {sortedMembers.map((member, index) => (
+                  <LeaderboardRow
+                    key={member.id}
+                    user={memberToUser(member, index)}
+                    index={index}
+                    isCurrentUser={member.user_id === user?.id}
+                    isLowestScorer={!!lowestScorer && member.user_id === lowestScorer.user_id}
+                    competitionFormat={league.game_format}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
         )}
 
         {isLiveWeek && currentSeason && currentWeek && (
