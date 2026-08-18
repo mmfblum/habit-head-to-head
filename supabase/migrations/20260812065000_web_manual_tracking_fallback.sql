@@ -60,7 +60,7 @@ DECLARE
   season_rec RECORD;
 BEGIN
   FOR season_rec IN
-    SELECT id FROM public.seasons WHERE status IN ('draft', 'preseason', 'active')
+    SELECT id FROM public.seasons WHERE status IN ('draft', 'active')
   LOOP
     PERFORM public.generate_task_instances_for_user(season_rec.id, NULL);
   END LOOP;
