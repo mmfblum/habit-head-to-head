@@ -161,10 +161,8 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       setDefaultPackLoaded(true);
 
       if (formData.gameFormat === 'solo') {
-        await startSeason.mutateAsync({ seasonId: season.id, gameFormat: 'solo' });
-        toast.success('Solo is live with the Classic Zrizin scorecard.');
-        onClose();
-        navigate('/tasks');
+        setStep('tasks');
+        toast.success('Solo created. Choose exactly what you want to track.');
         return;
       }
 
@@ -288,12 +286,10 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const isLeaderboard = formData.gameFormat === 'leaderboard';
   const isSolo = formData.gameFormat === 'solo';
   const steps = isSolo
-    ? step === 'tasks'
-      ? [
-          { id: 'details', label: 'Solo', icon: UserRound },
-          { id: 'tasks', label: 'Goals', icon: Gamepad2 },
-        ]
-      : [{ id: 'details', label: 'Solo', icon: UserRound }]
+    ? [
+        { id: 'details', label: 'Solo', icon: UserRound },
+        { id: 'tasks', label: 'Goals', icon: Gamepad2 },
+      ]
     : step === 'tasks'
       ? [
           { id: 'details', label: 'League', icon: Trophy },
@@ -320,7 +316,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
               ) : (
                 <div className="w-16" />
               )}
-              <h2 className="font-display font-bold text-lg">Create League</h2>
+              <h2 className="font-display font-bold text-lg">{isSolo ? 'Create Solo' : 'Create League'}</h2>
               <div className="w-16" />
             </div>
 
@@ -353,11 +349,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">League Name</Label>
-                    <Input id="name" placeholder="The Morning League" value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} />
+                    <Label htmlFor="name">{isSolo ? 'Solo Name' : 'League Name'}</Label>
+                    <Input id="name" placeholder={isSolo ? 'My Grind' : 'The Morning League'} value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="description">League motto (optional)</Label>
+                    <Label htmlFor="description">{isSolo ? 'Personal motto (optional)' : 'League motto (optional)'}</Label>
                     <Textarea id="description" placeholder="No excuses. Win the week." value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows={3} />
                   </div>
 
@@ -418,7 +414,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                           {formData.gameFormat === 'solo' && <Check className="w-5 h-5 text-primary" />}
                         </div>
                         <p className="font-display font-bold mt-3">Solo</p>
-                        <p className="text-xs text-muted-foreground mt-1">Track your goals for yourself and share a live accountability page with friends.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Choose your own scorecard, build streaks and stats, and share a live accountability page.</p>
                       </button>
                     </div>
                   </div>
@@ -440,8 +436,8 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
 
-                <Button onClick={handleDetailsSubmit} className="w-full" size="lg" disabled={createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending || tasksLoading}>
-                  {createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending ? 'Creating...' : 'Create League'}
+                <Button onClick={handleDetailsSubmit} className="w-full" size="lg" disabled={createLeague.isPending || createSeason.isPending || configureTasks.isPending || tasksLoading}>
+                  {createLeague.isPending || createSeason.isPending || configureTasks.isPending ? 'Creating...' : isSolo ? 'Choose My Goals' : 'Create League'}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </motion.div>
@@ -451,7 +447,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
               <motion.div key="tasks" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                 <div className="text-center mb-4">
                   <Zap className="w-12 h-12 text-secondary mx-auto mb-3" />
-                  <h3 className="text-xl font-display font-bold">What Scores Each Day?</h3>
+                  <h3 className="text-xl font-display font-bold">{isSolo ? 'Choose Your Daily Goals' : 'What Scores Each Day?'}</h3>
                   <p className="text-muted-foreground">Classic Zrizin is already loaded. Keep it, choose another starter pack, or personalize anything.</p>
                 </div>
 
@@ -468,7 +464,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     </div>
                     <div>
                       <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">3</div>
-                      <p className="text-xs mt-2">{isSolo ? 'Keep the promise' : isLeaderboard ? 'Climb the board' : 'Weekly total wins'}</p>
+                      <p className="text-xs mt-2">{isSolo ? 'Build your streaks' : isLeaderboard ? 'Climb the board' : 'Weekly total wins'}</p>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-3">Want extra steps or minutes to matter? Open “Goal & scoring” on any task and switch it to Performance.</p>
@@ -490,8 +486,8 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
                 <section className="space-y-3">
                   <div>
-                    <h4 className="font-display font-semibold">Your league’s signature challenge</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Optional, but this is where a league starts to feel like your league.</p>
+                    <h4 className="font-display font-semibold">{isSolo ? 'Your signature challenge' : 'Your league’s signature challenge'}</h4>
+                    <p className="text-xs text-muted-foreground mt-1">{isSolo ? 'Optional — add something specific to the person you want to become.' : 'Optional, but this is where a league starts to feel like your league.'}</p>
                   </div>
                   <CustomChallengeBuilder
                     templates={customChallengeTemplates}
@@ -525,7 +521,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
                 <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-background via-background to-transparent">
                   <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskConfigs.size < 3 || configureTasks.isPending || startSeason.isPending}>
-                    {configureTasks.isPending || startSeason.isPending ? 'Saving game...' : isSolo ? 'Start Tracking Today' : 'Use This Scorecard & Invite Friends'}
+                    {configureTasks.isPending || startSeason.isPending ? 'Saving game...' : isSolo ? 'Start My Solo Season' : 'Use This Scorecard & Invite Friends'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                   {taskConfigs.size < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}
