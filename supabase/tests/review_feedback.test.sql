@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(11);
+select plan(14);
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('55555555-5555-4555-8555-555555555555', 'multi-league-owner@zrizin.local', '{}'::jsonb),
@@ -68,6 +68,84 @@ select is(
   ),
   2,
   'Both repeated custom tasks are stored independently'
+);
+
+-- Quantity-aware names must survive beyond setup preview into real task instances.
+insert into public.league_task_configs (season_id, task_template_id, config_overrides, display_order)
+select s.id, t.id, jsonb_build_object('target',30,'scoring_mode','binary','binary_points',3), 2
+from public.seasons s
+join public.leagues l on l.id=s.league_id
+cross join lateral (
+  select id from public.task_templates where name='Pushups' limit 1
+) t
+where l.name='League One';
+
+-- Reuse the same Count template twice to model the unlimited custom-task UI.
+insert into public.league_task_configs (season_id, task_template_id, config_overrides, display_order)
+select s.id, t.id, jsonb_build_object('custom_name','Situps','threshold',40,'scoring_mode','binary','binary_points',3), 3
+from public.seasons s
+join public.leagues l on l.id=s.league_id
+cross join lateral (
+  select id from public.task_templates where name='Custom Challenge — Count' limit 1
+) t
+where l.name='League One';
+
+insert into public.league_task_configs (season_id, task_template_id, config_overrides, display_order)
+select s.id, t.id, jsonb_build_object('custom_name','Pullups','threshold',12,'scoring_mode','binary','binary_points',3), 4
+from public.seasons s
+join public.leagues l on l.id=s.league_id
+cross join lateral (
+  select id from public.task_templates where name='Custom Challenge — Count' limit 1
+) t
+where l.name='League One';
+
+select public.generate_task_instances_for_user(
+  (select s.id from public.seasons s join public.leagues l on l.id=s.league_id where l.name='League One' limit 1),
+  null
+);
+
+select is(
+  (
+    select ti.task_name
+    from public.task_instances ti
+    join public.seasons s on s.id=ti.season_id
+    join public.leagues l on l.id=s.league_id
+    join public.league_task_configs ltc on ltc.id=ti.league_task_config_id
+    join public.task_templates tt on tt.id=ltc.task_template_id
+    where l.name='League One' and tt.name='Pushups'
+    limit 1
+  ),
+  '30 Pushups',
+  'A 30-rep Pushups goal is named 30 Pushups on the live task instance'
+);
+
+select is(
+  (
+    select count(*)::int
+    from public.task_instances ti
+    join public.seasons s on s.id=ti.season_id
+    join public.leagues l on l.id=s.league_id
+    where l.name='League One' and ti.task_name in ('40 Situps','12 Pullups')
+  ),
+  2,
+  'Repeated custom Count tasks generate independent quantity-aware task instances'
+);
+
+select ok(
+  exists(
+    select 1
+    from public.task_instances ti
+    join public.seasons s on s.id=ti.season_id
+    join public.leagues l on l.id=s.league_id
+    where l.name='League One' and ti.task_name='40 Situps'
+  ) and exists(
+    select 1
+    from public.task_instances ti
+    join public.seasons s on s.id=ti.season_id
+    join public.leagues l on l.id=s.league_id
+    where l.name='League One' and ti.task_name='12 Pullups'
+  ),
+  'Each custom quantity is preserved in its own displayed task name'
 );
 
 select ok(
