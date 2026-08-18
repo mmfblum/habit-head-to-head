@@ -3,17 +3,31 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { TaskTemplate } from '@/hooks/useTaskTemplates';
 import type { TaskConfigOverrides } from './TaskConfigurationPanel';
+import type { CustomTaskEntry } from './CustomTaskListBuilder';
 import { getConfiguredTaskName, getTaskScoringSentence } from '@/lib/taskNaming';
 
 interface TaskSummaryPreviewProps {
   templates: TaskTemplate[];
   configs: Map<string, TaskConfigOverrides>;
+  customTasks?: CustomTaskEntry[];
 }
 
-export function TaskSummaryPreview({ templates, configs }: TaskSummaryPreviewProps) {
-  if (configs.size === 0) return null;
+export function TaskSummaryPreview({ templates, configs, customTasks = [] }: TaskSummaryPreviewProps) {
+  if (configs.size === 0 && customTasks.length === 0) return null;
 
-  const selectedTemplates = templates.filter((template) => configs.has(template.id));
+  const rows = [
+    ...templates
+      .filter((template) => configs.has(template.id))
+      .map((template) => ({
+        key: template.id,
+        template,
+        config: configs.get(template.id)!,
+      })),
+    ...customTasks.flatMap((entry) => {
+      const template = templates.find((candidate) => candidate.id === entry.value.templateId);
+      return template ? [{ key: entry.id, template, config: entry.value.config }] : [];
+    }),
+  ];
 
   return (
     <Card className="border-primary/20 bg-primary/5 overflow-hidden">
@@ -23,19 +37,16 @@ export function TaskSummaryPreview({ templates, configs }: TaskSummaryPreviewPro
           The Daily Scorecard
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          This is what every player is competing to score each day.
+          This is what will actually appear on the daily card.
         </p>
       </CardHeader>
       <CardContent className="space-y-2">
-        {selectedTemplates.map((template) => {
-          const config = configs.get(template.id);
-          if (!config) return null;
-
+        {rows.map(({ key, template, config }) => {
           const displayName = getConfiguredTaskName(template, config);
           const isGoalScoring = config.scoring_mode === 'binary';
 
           return (
-            <div key={template.id} className="py-3 px-3 rounded-xl bg-background/60 border border-border/50">
+            <div key={key} className="py-3 px-3 rounded-xl bg-background/60 border border-border/50">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <div className="w-6 h-6 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
@@ -57,7 +68,7 @@ export function TaskSummaryPreview({ templates, configs }: TaskSummaryPreviewPro
         <div className="pt-3 mt-2 border-t border-border/50 flex items-start gap-2">
           <Target className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
-            Matchups are won by the weekly point total. Goal scoring keeps tasks equally weighted; Performance scoring lets extra effort add more.
+            Goal scoring keeps tasks equally weighted; Performance scoring lets extra effort add more.
           </p>
         </div>
       </CardContent>
