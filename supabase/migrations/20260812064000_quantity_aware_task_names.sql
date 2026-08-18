@@ -45,7 +45,10 @@ BEGIN
     ELSIF merged_config ? 'daily_limit_minutes' THEN
       quantity := NULLIF(merged_config->>'daily_limit_minutes', '')::NUMERIC;
       IF quantity IS NOT NULL AND quantity > 0 THEN
-        quantity_text := TRIM(TO_CHAR(quantity, 'FM999,999,999,990.##'));
+        quantity_text := CASE
+          WHEN quantity = TRUNC(quantity) THEN TRIM(TO_CHAR(quantity, 'FM999,999,999,990'))
+          ELSE RTRIM(RTRIM(TRIM(TO_CHAR(quantity, 'FM999,999,999,990.99')), '0'), '.')
+        END;
         display_name := base_name || ' ≤ ' || quantity_text || ' min';
       END IF;
     ELSE
@@ -55,7 +58,10 @@ BEGIN
       );
 
       IF quantity IS NOT NULL AND quantity > 0 THEN
-        quantity_text := TRIM(TO_CHAR(quantity, 'FM999,999,999,990.##'));
+        quantity_text := CASE
+          WHEN quantity = TRUNC(quantity) THEN TRIM(TO_CHAR(quantity, 'FM999,999,999,990'))
+          ELSE RTRIM(RTRIM(TRIM(TO_CHAR(quantity, 'FM999,999,999,990.99')), '0'), '.')
+        END;
         display_name := CASE config_rec.unit::TEXT
           WHEN 'count' THEN quantity_text || ' ' || base_name
           WHEN 'steps' THEN quantity_text || ' ' ||
