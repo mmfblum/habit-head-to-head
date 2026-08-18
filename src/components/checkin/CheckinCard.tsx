@@ -24,6 +24,7 @@ import {
 } from '@/lib/verification';
 import type { VerificationConfig, VerificationMetadata } from '@/lib/verification';
 import { triggerConfetti } from '@/lib/confetti';
+import { getManualGoalCheckinValue } from '@/lib/taskProgress';
 import { useToast } from '@/hooks/use-toast';
 
 interface CheckinCardProps {
@@ -115,16 +116,11 @@ export function CheckinCard({
   const description = customDescription || task.template?.description;
   const scoringMode = typeof config.scoring_mode === 'string' ? config.scoring_mode : 'detailed';
   const goalPoints = numberFrom(config, 'binary_points', 'points') ?? 3;
-  const goalTarget = numberFrom(config, 'target', 'threshold')
-    ?? numberFrom(templateDefaults, 'target', 'threshold');
-  const prefersExactEntry = config.prefer_exact_entry === true
-    || task.template?.unit === 'steps'
-    || config.daily_limit_minutes !== undefined
-    || task.task_name.toLowerCase().includes('screen time');
+  const goalTarget = numberFrom(config, 'daily_limit_minutes', 'target', 'threshold')
+    ?? numberFrom(templateDefaults, 'daily_limit_minutes', 'target', 'threshold');
   const canQuickScoreGoal = scoringMode === 'binary'
     && (task.input_type === 'numeric' || task.input_type === 'duration')
     && verificationConfig.method !== 'timer_based'
-    && !prefersExactEntry
     && goalTarget !== undefined;
 
   const handleValueChange = useCallback((newValue: CheckinValue) => {
@@ -196,12 +192,10 @@ export function CheckinCard({
   };
 
   const handleQuickGoal = async (hitGoal: boolean) => {
-    if (goalTarget === undefined) return;
-    const checkinValue: CheckinValue = task.input_type === 'duration'
-      ? { duration_minutes: hitGoal ? goalTarget : 0 }
-      : { numeric_value: hitGoal ? goalTarget : 0 };
+    const checkinValue = getManualGoalCheckinValue(task, hitGoal);
+    if (!checkinValue) return;
     setValue((previous) => ({ ...previous, ...checkinValue }));
-    await handleSubmit(checkinValue, 'manual', true);
+    await handleSubmit(checkinValue, 'manual', true, { manual_fallback: true });
   };
 
   const handleNumericChange = (newValue: number) => handleValueChange({ numeric_value: newValue });
@@ -279,6 +273,7 @@ export function CheckinCard({
             ) : canQuickScoreGoal ? (
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2"><Button variant="outline" className="h-11" onClick={() => handleQuickGoal(false)} disabled={isPending}>Missed</Button><Button className="h-11 font-bold" onClick={() => handleQuickGoal(true)} disabled={isPending}>{powerPlayArmed ? `Done +${goalPoints * 2} ⚡` : `Done +${goalPoints}`}</Button></div>
+                {task.template?.supports_integration && <p className="text-[11px] text-center text-muted-foreground">Manual check-off works now. Exact or device data can replace it later.</p>}
                 <button type="button" onClick={() => setShowExactEntry((current) => !current)} className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1">{showExactEntry ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}{showExactEntry ? 'Hide exact amount' : 'Log exact amount'}</button>
                 <AnimatePresence initial={false}>{showExactEntry && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden"><div className="pt-1">{renderInput()}{needsScoreButton && <div className="mt-3"><ConfirmationButton confirmationAction="log_score" isConfirmed={false} onConfirm={handleConfirmation} disabled={isPending} /></div>}</div></motion.div>}</AnimatePresence>
               </div>
