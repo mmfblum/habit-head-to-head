@@ -47,8 +47,10 @@ select
 from public.task_instances ti
 join public.seasons s on s.id=ti.season_id
 join public.leagues l on l.id=s.league_id
+join public.league_task_configs ltc on ltc.id=ti.league_task_config_id
+join public.task_templates tt on tt.id=ltc.task_template_id
 where l.created_by='77777777-7777-4777-8777-777777777777'
-  and ti.task_name='Screen Time';
+  and tt.name='Screen Time';
 reset role;
 
 select is(
@@ -56,8 +58,10 @@ select is(
     select se.points_awarded
     from public.scoring_events se
     join public.task_instances ti on ti.id=se.task_instance_id
+    join public.league_task_configs ltc on ltc.id=ti.league_task_config_id
+    join public.task_templates tt on tt.id=ltc.task_template_id
     where se.user_id='77777777-7777-4777-8777-777777777777'
-      and ti.task_name='Screen Time'
+      and tt.name='Screen Time'
       and se.is_reversed=false
     order by se.created_at desc
     limit 1
@@ -71,9 +75,11 @@ set local request.jwt.claim.sub = '77777777-7777-4777-8777-777777777777';
 update public.daily_checkins dc
 set metadata='{"source":"manual"}'::jsonb
 from public.task_instances ti
+join public.league_task_configs ltc on ltc.id=ti.league_task_config_id
+join public.task_templates tt on tt.id=ltc.task_template_id
 where dc.task_instance_id=ti.id
   and dc.user_id='77777777-7777-4777-8777-777777777777'
-  and ti.task_name='Screen Time';
+  and tt.name='Screen Time';
 reset role;
 
 select is(
@@ -81,8 +87,10 @@ select is(
     select se.points_awarded
     from public.scoring_events se
     join public.task_instances ti on ti.id=se.task_instance_id
+    join public.league_task_configs ltc on ltc.id=ti.league_task_config_id
+    join public.task_templates tt on tt.id=ltc.task_template_id
     where se.user_id='77777777-7777-4777-8777-777777777777'
-      and ti.task_name='Screen Time'
+      and tt.name='Screen Time'
       and se.is_reversed=false
     order by se.created_at desc
     limit 1
