@@ -43,7 +43,7 @@ export function LeaderboardRow({
   };
 
   const getStreakIndicator = () => {
-    if (competitionFormat === 'leaderboard' || user.streak <= 0 || !user.streakType) return null;
+    if (competitionFormat !== 'head_to_head' || user.streak <= 0 || !user.streakType) return null;
     if (user.streakType === 'W') return <div className="flex items-center gap-0.5 text-primary"><TrendingUp className="w-3 h-3" /><span className="text-xs font-semibold">{user.streak}W</span></div>;
     return <div className="flex items-center gap-0.5 text-loss"><TrendingDown className="w-3 h-3" /><span className="text-xs font-semibold">{user.streak}L</span></div>;
   };
@@ -68,11 +68,21 @@ export function LeaderboardRow({
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2"><span className={`font-semibold text-sm truncate ${isCurrentUser ? 'text-primary' : ''}`}>{user.username}</span>{getStreakIndicator()}</div>
-        <p className="text-xs text-muted-foreground">{competitionFormat === 'leaderboard' ? `${user.weeklyScore.toLocaleString()} raw pts this week` : `${record} ${user.ties > 0 ? 'W-L-T' : 'W-L'}`}</p>
+        <p className="text-xs text-muted-foreground">
+          {competitionFormat === 'head_to_head'
+            ? `${record} ${user.ties > 0 ? 'W-L-T' : 'W-L'}`
+            : `${user.weeklyScore.toLocaleString()} pts this week`}
+        </p>
       </div>
       <div className="text-right">
         <p className="score-text text-lg">{user.seasonScore.toLocaleString()}</p>
-        <p className="text-xs text-muted-foreground">{competitionFormat === 'leaderboard' ? 'champ pts' : `${user.weeklyScore.toLocaleString()} this week`}</p>
+        <p className="text-xs text-muted-foreground">
+          {competitionFormat === 'leaderboard'
+            ? 'champ pts'
+            : competitionFormat === 'solo'
+              ? 'season pts'
+              : `${user.weeklyScore.toLocaleString()} this week`}
+        </p>
       </div>
     </motion.div>
   );
