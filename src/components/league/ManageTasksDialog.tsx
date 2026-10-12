@@ -10,10 +10,10 @@ import { TaskConfigurationPanel, TaskConfigOverrides, getInitialConfig } from '.
 import { CustomChallengeBuilder, type CustomChallengeValue } from './CustomChallengeBuilder';
 import { toast } from 'sonner';
 
-interface ManageTasksDialogProps { open: boolean; onOpenChange: (open: boolean) => void; seasonId: string; nextWeekStart?: string; }
+interface ManageTasksDialogProps { open: boolean; onOpenChange: (open: boolean) => void; seasonId: string; nextWeekStart?: string; gameFormat?: 'head_to_head' | 'leaderboard' | 'solo'; }
 const CUSTOM_PREFIX = 'Custom Challenge —';
 
-export function ManageTasksDialog({ open, onOpenChange, seasonId, nextWeekStart }: ManageTasksDialogProps) {
+export function ManageTasksDialog({ open, onOpenChange, seasonId, nextWeekStart, gameFormat }: ManageTasksDialogProps) {
   const { data: configs, isLoading: configsLoading } = useLeagueTaskConfigs(seasonId);
   const { data: templates } = useTaskTemplates();
   const updateConfig = useUpdateTaskConfig();
@@ -59,7 +59,7 @@ export function ManageTasksDialog({ open, onOpenChange, seasonId, nextWeekStart 
         {nextWeekStart && <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"><Clock className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" /><p className="text-sm text-amber-500">Changes take effect at the start of next week ({nextWeekStart})</p></div>}
 
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-          {configsLoading ? <div className="text-center py-8 text-muted-foreground">Loading tasks...</div> : enabledConfigs.length === 0 ? <div className="text-center py-8"><AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-2" /><p className="text-muted-foreground">No tasks configured yet</p></div> : <div className="space-y-3">{enabledConfigs.map((config) => <TaskConfigCard key={config.id} config={config} isExpanded={expandedConfigId===config.id} onToggleExpand={()=>setExpandedConfigId(expandedConfigId===config.id?null:config.id)} onUpdate={(overrides)=>handleUpdateConfig(config.id,overrides)} onRemove={()=>handleRemoveTask(config.id, String((config.config_overrides as Record<string, unknown> | null)?.custom_name || config.task_template.name))} isUpdating={updateConfig.isPending} isRemoving={removeConfig.isPending} />)}</div>}
+          {configsLoading ? <div className="text-center py-8 text-muted-foreground">Loading tasks...</div> : enabledConfigs.length === 0 ? <div className="text-center py-8"><AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-2" /><p className="text-muted-foreground">No tasks configured yet</p></div> : <div className="space-y-3">{enabledConfigs.map((config) => <TaskConfigCard key={config.id} config={config} isExpanded={expandedConfigId===config.id} onToggleExpand={()=>setExpandedConfigId(expandedConfigId===config.id?null:config.id)} onUpdate={(overrides)=>handleUpdateConfig(config.id,overrides)} onRemove={()=>handleRemoveTask(config.id, String((config.config_overrides as Record<string, unknown> | null)?.custom_name || config.task_template.name))} isUpdating={updateConfig.isPending} isRemoving={removeConfig.isPending} simpleScoring={gameFormat==='solo'} />)}</div>}
 
           <AnimatePresence>{showAddTask && <motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} className="overflow-hidden"><div className="border border-dashed border-border rounded-xl p-4 space-y-5">
             <div className="flex items-center justify-between"><div><h4 className="font-medium">Add tasks</h4><p className="text-xs text-muted-foreground">Use defaults or create as many league-specific tasks as you want.</p></div><Button variant="ghost" size="icon" onClick={()=>setShowAddTask(false)}><X className="w-4 h-4"/></Button></div>
@@ -74,11 +74,11 @@ export function ManageTasksDialog({ open, onOpenChange, seasonId, nextWeekStart 
   );
 }
 
-interface TaskConfigCardProps { config: LeagueTaskConfig; isExpanded:boolean; onToggleExpand:()=>void; onUpdate:(overrides:TaskConfigOverrides)=>void; onRemove:()=>void; isUpdating:boolean; isRemoving:boolean; }
-function TaskConfigCard({config,isExpanded,onToggleExpand,onUpdate,onRemove,isRemoving}:TaskConfigCardProps){
+interface TaskConfigCardProps { config: LeagueTaskConfig; isExpanded:boolean; onToggleExpand:()=>void; onUpdate:(overrides:TaskConfigOverrides)=>void; onRemove:()=>void; isUpdating:boolean; isRemoving:boolean; simpleScoring?: boolean; }
+function TaskConfigCard({config,isExpanded,onToggleExpand,onUpdate,onRemove,isRemoving,simpleScoring=false}:TaskConfigCardProps){
   const template=config.task_template;
   const currentOverrides=(config.config_overrides||{}) as unknown as TaskConfigOverrides;
   if(!template)return null;
   const displayName=currentOverrides.custom_name?.trim()||template.name;
-  return <motion.div layout className="rounded-xl border border-border bg-card p-4"><div className="flex items-start justify-between gap-3"><div className="flex-1 min-w-0"><p className="font-medium truncate">{displayName}</p><div className="flex items-center gap-2 mt-1"><Badge variant="outline" className="text-xs capitalize">{template.name.startsWith(CUSTOM_PREFIX)?'custom':template.category}</Badge>{currentOverrides?.scoring_mode==='binary'&&<Badge variant="secondary" className="text-xs">Goal</Badge>}{currentOverrides?.target_time&&<Badge variant="secondary" className="text-xs">{currentOverrides.target_time}</Badge>}</div></div><Button variant="ghost" size="icon" onClick={onRemove} disabled={isRemoving} className="text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></div><TaskConfigurationPanel template={template} config={currentOverrides||getInitialConfig(template)} onChange={onUpdate} isExpanded={isExpanded} onToggleExpand={onToggleExpand}/></motion.div>;
+  return <motion.div layout className="rounded-xl border border-border bg-card p-4"><div className="flex items-start justify-between gap-3"><div className="flex-1 min-w-0"><p className="font-medium truncate">{displayName}</p><div className="flex items-center gap-2 mt-1"><Badge variant="outline" className="text-xs capitalize">{template.name.startsWith(CUSTOM_PREFIX)?'custom':template.category}</Badge>{currentOverrides?.scoring_mode==='binary'&&<Badge variant="secondary" className="text-xs">Goal</Badge>}{currentOverrides?.target_time&&<Badge variant="secondary" className="text-xs">{currentOverrides.target_time}</Badge>}</div></div><Button variant="ghost" size="icon" onClick={onRemove} disabled={isRemoving} className="text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></div><TaskConfigurationPanel template={template} config={currentOverrides||getInitialConfig(template)} onChange={onUpdate} isExpanded={isExpanded} onToggleExpand={onToggleExpand} simpleScoring={simpleScoring}/></motion.div>;
 }
