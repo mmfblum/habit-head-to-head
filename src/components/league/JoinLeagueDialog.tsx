@@ -41,7 +41,7 @@ export function JoinLeagueDialog({ open, onOpenChange, initialCode = '' }: JoinL
       const league = await joinLeague.mutateAsync(inviteCode);
       toast.success(`Joined ${league.name}!`);
       onOpenChange(false);
-      navigate('/league', { replace: true });
+      navigate(league.game_format === 'solo' ? '/' : '/league', { replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to join league');
     }
