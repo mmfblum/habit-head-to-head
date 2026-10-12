@@ -18,6 +18,7 @@ import { isTaskGoalMet } from '@/lib/taskProgress';
 import { TASK_ICONS } from '@/types/checkin';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { User, Matchup, Task } from '@/lib/mockData';
+import { toast } from 'sonner';
 
 function DashboardSkeleton() {
   return (
@@ -196,6 +197,28 @@ export default function Dashboard() {
       ? `Week ${currentWeek.week_number} starts ${formatWeekKickoff(currentWeek.start_date)} • Season ${leagueDetails.current_season.season_number}`
       : `Week ${currentWeek?.week_number ?? 1} • Season ${leagueDetails.current_season.season_number}`;
 
+  const shareSoloInvite = async () => {
+    if (!leagueDetails.invite_code) return;
+    const url = `${window.location.origin}/?join=${encodeURIComponent(leagueDetails.invite_code)}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Join ${leagueDetails.name} on Zrizin`,
+          text: 'Join my Zrizin scorecard. We use the same goals and compete on the leaderboard.',
+          url,
+        });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success('Invite link copied');
+      }
+    } catch (error) {
+      if ((error as Error)?.name !== 'AbortError') {
+        await navigator.clipboard.writeText(url);
+        toast.success('Invite link copied');
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border safe-top">
@@ -325,6 +348,36 @@ export default function Dashboard() {
             </motion.div>
           )}
         </section>
+
+        {isSolo && leagueDetails.invite_code && (
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => void shareSoloInvite()}
+            className="w-full rounded-xl border border-secondary/25 bg-secondary/10 p-4 text-left flex items-center gap-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center shrink-0">
+              <UserPlus className="w-5 h-5 text-secondary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm">{totalMembers > 1 ? 'Invite more friends' : 'Invite friends to this scorecard'}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Same tasks · 3 points per completed goal · no head-to-head
+              </p>
+            </div>
+            <span className="text-[10px] font-mono text-secondary shrink-0">{leagueDetails.invite_code.toUpperCase()}</span>
+          </motion.button>
+        )}
+
+        {isSolo && totalMembers > 1 && currentWeek && (
+          <LeaderboardRaceCard
+            members={leagueDetails.members}
+            currentUserId={user?.id}
+            weekNumber={currentWeek.week_number}
+            onOpen={() => navigate('/league')}
+          />
+        )}
 
         {isSolo && hasActiveSeason && (
           <AccountabilityShareCard leagueId={leagueDetails.id} />
