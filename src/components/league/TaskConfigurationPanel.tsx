@@ -29,6 +29,7 @@ interface TaskConfigurationPanelProps {
   onChange: (config: TaskConfigOverrides) => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  simpleScoring?: boolean;
 }
 
 export function getInitialConfig(template: TaskTemplate): TaskConfigOverrides {
@@ -53,6 +54,7 @@ export function TaskConfigurationPanel({
   onChange,
   isExpanded,
   onToggleExpand,
+  simpleScoring = false,
 }: TaskConfigurationPanelProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const controlled = isExpanded !== undefined;
@@ -118,10 +120,17 @@ export function TaskConfigurationPanel({
 
         <CollapsibleContent>
           <div className="pt-3 space-y-4" onClick={(event) => event.stopPropagation()}>
-            <ScoringModeToggle
-              value={config.scoring_mode}
-              onChange={(mode) => updateField('scoring_mode', mode)}
-            />
+            {simpleScoring ? (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <p className="text-xs font-semibold">Simple scoring</p>
+                <p className="text-xs text-muted-foreground mt-1">Hit the daily goal for 3 points. Miss it for 0.</p>
+              </div>
+            ) : (
+              <ScoringModeToggle
+                value={config.scoring_mode}
+                onChange={(mode) => updateField('scoring_mode', mode)}
+              />
+            )}
 
             {(hasTimeGoal || hasNumericGoal) && (
               <div className="space-y-3 rounded-xl border border-border/50 bg-background/40 p-3">
@@ -148,7 +157,7 @@ export function TaskConfigurationPanel({
               </div>
             )}
 
-            {config.scoring_mode === 'detailed' && canEditPerformancePoints && (
+            {!simpleScoring && config.scoring_mode === 'detailed' && canEditPerformancePoints && (
               <div className="space-y-3 rounded-xl border border-secondary/20 bg-secondary/5 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Performance scoring</p>
                 <PointsConfigInput
