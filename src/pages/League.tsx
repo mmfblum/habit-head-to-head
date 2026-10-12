@@ -78,6 +78,9 @@ export default function League() {
     if (isLeaderboard) {
       return b.championship_points - a.championship_points || b.total_points - a.total_points || b.weekly_points - a.weekly_points;
     }
+    if (isSolo) {
+      return b.total_points - a.total_points || b.weekly_points - a.weekly_points;
+    }
     return (
       (a.current_rank ?? 999) - (b.current_rank ?? 999) ||
       b.wins - a.wins ||
@@ -287,7 +290,7 @@ export default function League() {
                   {isLeaderboard
                     ? 'The board opens Sunday. Everyone scores the same daily game and races for #1.'
                     : isSolo
-                      ? 'Your next Solo tracking week is scheduled.'
+                      ? 'Everyone in this Solo scorecard uses the same tasks. Completed goals earn 3 points and the leaderboard updates live.'
                       : 'The matchups are locked in. Scoring, power plays, and taunts open Sunday.'}
                 </p>
               </div>
@@ -295,7 +298,7 @@ export default function League() {
           </motion.section>
         )}
 
-        {isActive && isLeaderboard && currentWeek && (
+        {isActive && (isLeaderboard || isSolo) && currentWeek && (
           <section>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -410,12 +413,11 @@ export default function League() {
           </section>
         )}
 
-        {!isSolo && (
-          <section>
+        <section>
             <div className="flex items-center gap-2 mb-3">
               <Trophy className="w-4 h-4 text-pending" />
               <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-                {isActive ? (isLeaderboard ? 'Season Championship' : 'Season Standings') : 'League Members'}
+                {isActive ? (isLeaderboard ? 'Season Championship' : isSolo ? 'Solo Standings' : 'Season Standings') : 'League Members'}
               </h2>
             </div>
 
@@ -438,7 +440,6 @@ export default function League() {
               </div>
             )}
           </section>
-        )}
 
         {isLiveWeek && currentSeason && currentWeek && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="card-elevated rounded-xl p-4">
@@ -471,6 +472,7 @@ export default function League() {
             onOpenChange={setShowManageTasks}
             seasonId={currentSeason.id}
             nextWeekStart={nextWeekStart}
+            gameFormat={league.game_format}
           />
           <InitialTaskSetupDialog
             open={showInitialSetup}
