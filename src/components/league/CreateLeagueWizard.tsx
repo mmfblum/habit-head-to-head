@@ -178,7 +178,13 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     setTaskConfigs((previous) => {
       const next = new Map(previous);
       if (next.has(taskId)) next.delete(taskId);
-      else next.set(taskId, getInitialConfig(template));
+      else {
+        const initial = getInitialConfig(template);
+        next.set(taskId, formData.gameFormat === 'solo'
+          ? { ...initial, scoring_mode: 'binary', binary_points: 3 }
+          : initial
+        );
+      }
       return next;
     });
   };
@@ -186,7 +192,10 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const handleUpdateConfig = (taskId: string, config: TaskConfigOverrides) => {
     setTaskConfigs((previous) => {
       const next = new Map(previous);
-      next.set(taskId, config);
+      next.set(taskId, formData.gameFormat === 'solo'
+        ? { ...config, scoring_mode: 'binary', binary_points: 3 }
+        : config
+      );
       return next;
     });
   };
@@ -199,6 +208,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const handleQuickStart = (packId: StarterPackId) => {
     if (!groupedTemplates) return;
     const next = buildStarterPack(packId);
+    if (formData.gameFormat === 'solo') {
+      next.forEach((config, taskId) => {
+        next.set(taskId, { ...config, scoring_mode: 'binary', binary_points: 3 });
+      });
+    }
     setTaskConfigs(next);
     setDefaultPackLoaded(true);
     toast.success(`${STARTER_PACKS[packId].label} loaded. Your custom tasks stayed in place.`);
@@ -240,15 +254,20 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
       if (!season) return;
 
+      const normalizeSoloConfig = (config: TaskConfigOverrides) =>
+        formData.gameFormat === 'solo'
+          ? { ...config, scoring_mode: 'binary' as const, binary_points: 3 }
+          : config;
+
       const standardConfigs = Array.from(taskConfigs.entries()).map(([taskId, config], index) => ({
         task_template_id: taskId,
         display_order: index,
-        config_overrides: serializeConfig(config),
+        config_overrides: serializeConfig(normalizeSoloConfig(config)),
       }));
       const customConfigs = customTasks.map((entry, index) => ({
         task_template_id: entry.value.templateId,
         display_order: standardConfigs.length + index,
-        config_overrides: serializeConfig(entry.value.config),
+        config_overrides: serializeConfig(normalizeSoloConfig(entry.value.config)),
       }));
 
       await configureTasks.mutateAsync({
@@ -436,7 +455,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                           {formData.gameFormat === 'solo' && <Check className="w-5 h-5 text-primary" />}
                         </div>
                         <p className="font-display font-bold mt-3">Solo</p>
-                        <p className="text-xs text-muted-foreground mt-1">Choose your own scorecard, build streaks and stats, and share a live accountability page.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Start alone or invite friends into the same scorecard. No matchups—just shared goals, points, and a live leaderboard.</p>
                       </button>
                     </div>
                   </div>
@@ -489,7 +508,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                       <p className="text-xs mt-2">{isSolo ? 'Build your streaks' : isLeaderboard ? 'Climb the board' : 'Weekly total wins'}</p>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-3">When you change a quantity, the task name changes too—for example, Pushups set to 30 becomes “30 Pushups.”</p>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    {isSolo
+                      ? 'Every goal is equally weighted: complete it for 3 points, miss it for 0. Change the goal itself anytime before you start.'
+                      : 'When you change a quantity, the task name changes too—for example, Pushups set to 30 becomes “30 Pushups.”'}
+                  </p>
                 </div>
 
                 <div className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors ${
@@ -533,6 +556,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                       onUpdateConfig={handleUpdateConfig}
                       onClearAll={handleClearAll}
                       minRequired={3}
+                      simpleScoring={isSolo}
                     />
                   )}
                 </section>
