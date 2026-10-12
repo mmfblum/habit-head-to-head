@@ -13,6 +13,7 @@ interface TaskSelectionGridProps {
   onUpdateConfig: (taskId: string, config: TaskConfigOverrides) => void;
   onClearAll?: () => void;
   minRequired?: number;
+  simpleScoring?: boolean;
 }
 
 const categoryIcons: Record<string, React.ElementType> = {
@@ -46,6 +47,7 @@ export function TaskSelectionGrid({
   onUpdateConfig,
   onClearAll,
   minRequired = 0,
+  simpleScoring = false,
 }: TaskSelectionGridProps) {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const categories = Object.keys(groupedTemplates);
@@ -140,6 +142,7 @@ export function TaskSelectionGrid({
                         onChange={(newConfig) => onUpdateConfig(task.id, newConfig)}
                         isExpanded={isExpanded}
                         onToggleExpand={() => setExpandedTask(isExpanded ? null : task.id)}
+                        simpleScoring={simpleScoring}
                       />
                     )}
                   </motion.div>
