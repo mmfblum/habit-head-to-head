@@ -68,15 +68,36 @@ export function SoloStatsDashboard({
 
       if (taskError) throw taskError;
 
+      const { data: season } = await supabase
+        .from('seasons')
+        .select('league_id')
+        .eq('id', seasonId)
+        .single();
+
+      let joinedAt: string | null = null;
+      if (season?.league_id) {
+        const { data: membership } = await supabase
+          .from('league_members')
+          .select('joined_at')
+          .eq('league_id', season.league_id)
+          .eq('user_id', userId)
+          .maybeSingle();
+        joinedAt = membership?.joined_at ?? null;
+      }
+
       const taskIds = (tasks || []).map((task) => task.id);
-      if (taskIds.length === 0) return { tasks: [], checkins: [] };
+      if (taskIds.length === 0) return { tasks: [], checkins: [], joinedAt };
 
       const today = startOfDay(new Date());
       const seasonStartDate = startOfDay(parseISO(seasonStart || weekStart));
+    const memberStartDate = query.data?.joinedAt
+      ? laterDate(seasonStartDate, startOfDay(parseISO(query.data.joinedAt)))
+      : seasonStartDate;
+      const memberStartDate = joinedAt ? startOfDay(parseISO(joinedAt)) : seasonStartDate;
       const calendarStart = startOfDay(startOfMonth(today));
       const competitionWeekStart = startOfDay(parseISO(weekStart));
       const earliestNeeded = isBefore(calendarStart, competitionWeekStart) ? calendarStart : competitionWeekStart;
-      const queryStart = laterDate(seasonStartDate, earliestNeeded);
+      const queryStart = laterDate(laterDate(seasonStartDate, memberStartDate), earliestNeeded);
 
       const { data: checkins, error: checkinError } = await supabase
         .from('daily_checkins')
@@ -88,7 +109,7 @@ export function SoloStatsDashboard({
         .order('checkin_date', { ascending: true });
 
       if (checkinError) throw checkinError;
-      return { tasks: tasks || [], checkins: checkins || [] };
+      return { tasks: tasks || [], checkins: checkins || [], joinedAt };
     },
     enabled: !!seasonId && !!userId,
   });
@@ -121,7 +142,7 @@ export function SoloStatsDashboard({
       !!checkin && isTaskGoalMet(taskWithCheckin(task, checkin));
 
     const buildPeriod = (start: Date, end: Date) => {
-      const effectiveStart = laterDate(startOfDay(start), seasonStartDate);
+      const effectiveStart = laterDate(startOfDay(start), memberStartDate);
       const effectiveEnd = earlierDate(startOfDay(end), today);
       const days = isAfter(effectiveStart, effectiveEnd)
         ? []
