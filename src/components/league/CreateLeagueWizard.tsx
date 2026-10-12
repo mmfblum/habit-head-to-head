@@ -118,7 +118,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
   const handleDetailsSubmit = async () => {
     if (!formData.name.trim()) {
-      toast.error('Please enter a league name');
+      toast.error('Please enter a name');
       return;
     }
     if (tasksLoading) {
@@ -129,6 +129,15 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
     const classic = buildStarterPack('classic');
     if (classic.size < 3) {
       toast.error('The default scorecard is not available yet.');
+      return;
+    }
+
+    // Solo is intentionally not created yet. The user must choose and confirm
+    // their goals first so onboarding cannot be short-circuited by LeagueGate.
+    if (formData.gameFormat === 'solo') {
+      setTaskConfigs(classic);
+      setDefaultPackLoaded(true);
+      setStep('tasks');
       return;
     }
 
@@ -157,13 +166,6 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       setCreatedSeason(season);
       setTaskConfigs(classic);
       setDefaultPackLoaded(true);
-
-      if (formData.gameFormat === 'solo') {
-        setStep('tasks');
-        toast.success('Solo created. Choose exactly what you want to track.');
-        return;
-      }
-
       setStep('invite');
       toast.success('League created. Classic Zrizin is already set up.');
     } catch (error) {
@@ -214,9 +216,30 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    if (!createdSeason) return;
-
     try {
+      let league = createdLeague;
+      let season = createdSeason;
+
+      if (formData.gameFormat === 'solo' && !season) {
+        league = await createLeague.mutateAsync({
+          name: formData.name,
+          description: formData.description,
+          gameFormat: 'solo',
+        });
+
+        season = await createSeason.mutateAsync({
+          leagueId: league.id,
+          name: 'Season 1',
+          weeksCount: formData.weeksCount,
+          startDate: new Date(),
+        });
+
+        setCreatedLeague(league);
+        setCreatedSeason(season);
+      }
+
+      if (!season) return;
+
       const standardConfigs = Array.from(taskConfigs.entries()).map(([taskId, config], index) => ({
         task_template_id: taskId,
         display_order: index,
@@ -229,22 +252,23 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       }));
 
       await configureTasks.mutateAsync({
-        seasonId: createdSeason.id,
+        seasonId: season.id,
         taskConfigs: [...standardConfigs, ...customConfigs],
       });
 
       if (formData.gameFormat === 'solo') {
-        await startSeason.mutateAsync({ seasonId: createdSeason.id, gameFormat: 'solo' });
-        toast.success('Solo is live. Your goals are on the clock.');
+        await startSeason.mutateAsync({ seasonId: season.id, gameFormat: 'solo' });
+        toast.success('Solo is live. Your scorecard is ready.');
         onClose();
-        navigate('/tasks');
+        navigate('/');
         return;
       }
 
       setStep('invite');
       toast.success('Your game is set. Now bring in the competition.');
-    } catch {
-      toast.error('Failed to save league rules');
+    } catch (error) {
+      console.error(error);
+      toast.error(formData.gameFormat === 'solo' ? 'Failed to create your Solo scorecard' : 'Failed to save league rules');
     }
   };
 
@@ -305,6 +329,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 <Button variant="ghost" size="sm" onClick={onClose}>
                   <ChevronLeft className="w-4 h-4 mr-1" />
                   Cancel
+                </Button>
+              ) : isSolo && step === 'tasks' && !createdSeason ? (
+                <Button variant="ghost" size="sm" onClick={() => setStep('details')}>
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Back
                 </Button>
               ) : (
                 <div className="w-16" />
@@ -441,7 +470,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 <div className="text-center mb-4">
                   <Zap className="w-12 h-12 text-secondary mx-auto mb-3" />
                   <h3 className="text-xl font-display font-bold">{isSolo ? 'Choose Your Daily Goals' : 'What Scores Each Day?'}</h3>
-                  <p className="text-muted-foreground">Classic Zrizin is already loaded. Keep it, choose another starter pack, or personalize anything.</p>
+                  <p className="text-muted-foreground">Pick the habits you actually want to be accountable for. Start with a pack, tap tasks on or off, and change any target.</p>
                 </div>
 
                 <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
@@ -513,8 +542,8 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 )}
 
                 <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-background via-background to-transparent">
-                  <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskCount < 3 || configureTasks.isPending || startSeason.isPending}>
-                    {configureTasks.isPending || startSeason.isPending ? 'Saving game...' : isSolo ? 'Start My Solo Season' : 'Use This Scorecard & Invite Friends'}
+                  <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskCount < 3 || createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending}>
+                    {createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending ? 'Saving...' : isSolo ? `Create My Solo Scorecard · ${taskCount} Tasks` : 'Use This Scorecard & Invite Friends'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                   {taskCount < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}
