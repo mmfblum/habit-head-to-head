@@ -94,7 +94,8 @@ export function TaskSelectionGrid({
                 const isSelected = selectedTasks.has(task.id);
                 const config = selectedTasks.get(task.id);
                 const isExpanded = expandedTask === task.id;
-                const displayName = isSelected && config ? getConfiguredTaskName(task, config) : task.name;
+                const defaultConfig = (task.default_config || {}) as unknown as TaskConfigOverrides;
+                const displayName = getConfiguredTaskName(task, isSelected && config ? config : defaultConfig);
 
                 return (
                   <motion.div
@@ -135,7 +136,7 @@ export function TaskSelectionGrid({
                       </div>
                     </button>
 
-                    {isSelected && config && (
+                    {isSelected && config && task.input_type !== 'binary' && (
                       <TaskConfigurationPanel
                         template={task}
                         config={config}
