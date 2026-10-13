@@ -71,7 +71,7 @@ export function ScoreCelebration({ points, taskName, powerPlay, isUpdate, onDone
           </motion.p>
           <p className="font-display font-bold text-lg mt-2 truncate">{taskName}</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {powerPlay ? '2× points. Double explosion.' : 'Points added to your matchup.'}
+            {powerPlay ? 'Power Play. That goal counted double.' : 'Added to your score.'}
           </p>
         </div>
       </motion.div>
