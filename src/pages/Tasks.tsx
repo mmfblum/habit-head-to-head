@@ -5,7 +5,6 @@ import { Progress } from '@/components/ui/progress';
 import { ChevronLeft, ChevronRight, Calendar, Eye, Flag, ListFilter, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DailyCheckinList } from '@/components/checkin';
-import { DeviceSyncCard } from '@/components/integrations/DeviceSyncCard';
 import { useTasksWithCheckins } from '@/hooks/useTasksWithCheckins';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';
@@ -35,14 +34,10 @@ export default function Tasks() {
 
   const { data: tasks = [], isLoading: tasksLoading } = useTasksWithCheckins(activeSeasonId, selectedDate);
   const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-  // A skipped optional task stays pending rather than becoming a synthetic
-  // failure. On prior days, unlogged clock/timestamp tasks are the exception:
-  // they represent an actual missed wake/bedtime input and count as unresolved.
-  const countedForProgress = tasks.filter((task) => !!task.todayCheckin || (!isToday && task.input_type === 'time'));
-  const completedCount = countedForProgress.filter(isTaskGoalMet).length;
-  const loggedCount = countedForProgress.length;
+  const completedCount = tasks.filter(isTaskGoalMet).length;
+  const loggedCount = tasks.filter((task) => !!task.todayCheckin).length;
   const scoringChancesLeft = tasks.filter((task) => !task.todayCheckin).length;
-  const progress = loggedCount > 0 ? (completedCount / loggedCount) * 100 : 0;
+  const progress = tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
 
   const goToPreviousDay = () => setSelectedDate((previous) => {
     const next = new Date(previous);
@@ -90,14 +85,14 @@ export default function Tasks() {
             <div className="bg-card rounded-xl p-3 border border-border/60">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">{isPreseason ? 'Practice Scorecard' : 'Daily Scorecard'}</span>
-                <span className="text-sm font-semibold">{completedCount} hit · {loggedCount} counted</span>
+                <span className="text-sm font-semibold">{completedCount}/{tasks.length} goals hit</span>
               </div>
               <Progress value={progress} className="h-2" />
               <div className="flex items-center justify-between mt-2">
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Zap className="w-3 h-3" />
                   {scoringChancesLeft === 0 && tasks.length > 0
-                    ? 'Everything logged today.'
+                    ? `${loggedCount} logged today`
                     : `${scoringChancesLeft} task${scoringChancesLeft === 1 ? '' : 's'} still open`}
                 </span>
                 <span className="score-text text-sm text-primary">{Math.round(progress)}%</span>
@@ -160,7 +155,6 @@ export default function Tasks() {
                 </PopoverContent>
               </Popover>
             </div>
-            {isToday && <DeviceSyncCard tasks={tasks} date={selectedDate} />}
           </>
         )}
 
