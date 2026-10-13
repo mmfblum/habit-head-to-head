@@ -17,8 +17,6 @@ import {
   buildVerifiedMetadata,
   createTimeCaptureMetadata,
   getVerificationConfig,
-  getVerificationStatus,
-  isCheckinVerified,
   validateCheckinValue,
 } from '@/lib/verification';
 import type { VerificationConfig, VerificationMetadata } from '@/lib/verification';
