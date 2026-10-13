@@ -76,7 +76,7 @@ export default function League() {
 
   const sortedMembers = [...league.members].sort((a, b) => {
     if (isLeaderboard) {
-      return b.championship_points - a.championship_points || b.total_points - a.total_points || b.weekly_points - a.weekly_points;
+      return b.total_points - a.total_points || b.weekly_points - a.weekly_points;
     }
     if (isSolo) {
       return b.total_points - a.total_points || b.weekly_points - a.weekly_points;
@@ -129,7 +129,7 @@ export default function League() {
     username: member.display_name || 'Unknown',
     avatar: member.avatar_url || member.display_name?.charAt(0).toUpperCase() || getDefaultAvatar(rank),
     weeklyScore: member.weekly_points,
-    seasonScore: isLeaderboard ? member.championship_points : member.total_points,
+    seasonScore: member.total_points,
     wins: member.wins,
     losses: member.losses,
     ties: member.ties,
@@ -147,7 +147,7 @@ export default function League() {
   const headerEyebrow = !currentSeason
     ? 'No season'
     : isDraft
-      ? `Season ${currentSeason.season_number} • ${isSolo ? 'Setup' : 'Preseason'} • ${formatLabel}`
+      ? `Season ${currentSeason.season_number} • ${isSolo || isLeaderboard ? 'Setup' : 'Preseason'} • ${formatLabel}`
       : isScheduledWeek && currentWeek
         ? `Season ${currentSeason.season_number} • Week ${currentWeek.week_number} starts ${formatWeekKickoff(currentWeek.start_date)}`
         : `Season ${currentSeason.season_number}${currentWeek ? ` • Week ${currentWeek.week_number}` : ''} • ${formatLabel}`;
@@ -246,7 +246,7 @@ export default function League() {
                         : league.members.length < 2
                           ? `Your rules are set. Invite at least one ${isLeaderboard ? 'other player' : 'opponent'} before Week 1 can begin.`
                           : isLeaderboard
-                            ? `${league.members.length} players are in. Starting now sets Week 1 for Sunday; everyone begins the weekly race at zero.`
+                            ? `${league.members.length} players are in. Starting now opens Week 1 immediately; everyone begins at zero.`
                             : `${league.members.length} players are in. Scheduling now locks the round-robin slate and sets Week 1 for the upcoming Sunday.`}
                     </p>
 
@@ -288,7 +288,7 @@ export default function League() {
                 <p className="font-semibold text-sm">Week {currentWeek.week_number} kicks off {formatWeekKickoff(currentWeek.start_date)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isLeaderboard
-                    ? 'The board opens Sunday. Everyone scores the same daily game and races for #1.'
+                    ? 'The leaderboard opens as soon as the commissioner starts it. Everyone scores the same daily game and races for #1.'
                     : isSolo
                       ? 'Everyone in this Solo scorecard uses the same tasks. Completed goals earn 1 point and the leaderboard updates live.'
                       : 'The matchups are locked in. Scoring, power plays, and taunts open Sunday.'}
@@ -308,7 +308,7 @@ export default function League() {
                 </h2>
               </div>
               <span className={`text-[10px] uppercase tracking-wider font-bold ${isLiveWeek ? 'text-primary' : 'text-muted-foreground'}`}>
-                {isLiveWeek ? 'Live' : weekPhase === 'scheduled' ? 'Opens Sunday' : 'Final'}
+                {isLiveWeek ? 'Live' : weekPhase === 'scheduled' ? `Opens ${formatWeekKickoff(currentWeek.start_date)}` : 'Final'}
               </span>
             </div>
 
@@ -330,12 +330,12 @@ export default function League() {
                         {isMe ? 'You' : member.display_name || 'Player'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {rank === 1 ? 'Setting the pace' : `${gap.toLocaleString()} pts off the lead`}
+                        {rank === 1 ? 'Setting the pace' : `${gap.toLocaleString()} points off the lead`}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="score-text text-xl">{member.weekly_points.toLocaleString()}</p>
-                      <p className="text-[10px] text-muted-foreground">week pts</p>
+                      <p className="text-[10px] text-muted-foreground">points</p>
                     </div>
                   </div>
                 );
@@ -417,7 +417,7 @@ export default function League() {
             <div className="flex items-center gap-2 mb-3">
               <Trophy className="w-4 h-4 text-pending" />
               <h2 className="font-display font-semibold text-sm text-muted-foreground uppercase tracking-wider">
-                {isActive ? (isLeaderboard ? 'Season Championship' : isSolo ? 'Solo Standings' : 'Season Standings') : 'League Members'}
+                {isActive ? (isLeaderboard ? 'Season Standings' : isSolo ? 'Solo Standings' : 'Season Standings') : 'League Members'}
               </h2>
             </div>
 
