@@ -74,6 +74,31 @@ describe('task goal evaluation', () => {
     expect(getManualGoalCheckinValue(steps, false)).toEqual({ numeric_value: 0 });
   });
 
+
+  it('creates one-tap done and missed values for wake time', () => {
+    const wake = task({
+      task_name: 'Wake by 6:30 AM',
+      input_type: 'time',
+      scoring_type: 'time_before',
+      config: { target_time: '06:30' },
+    });
+
+    expect(getManualGoalCheckinValue(wake, true)).toEqual({ time_value: '06:30' });
+    expect(getManualGoalCheckinValue(wake, false)).toEqual({ time_value: '06:31' });
+  });
+
+  it('creates one-tap done and missed values for bedtime', () => {
+    const bedtime = task({
+      task_name: 'Bed by 11:00 PM',
+      input_type: 'time',
+      scoring_type: 'time_before',
+      config: { target_time: '23:00' },
+    });
+
+    expect(getManualGoalCheckinValue(bedtime, true)).toEqual({ time_value: '23:00' });
+    expect(getManualGoalCheckinValue(bedtime, false)).toEqual({ time_value: '23:01' });
+  });
+
   it('treats a normal numeric target as value-at-or-above goal', () => {
     const steps = task({
       task_name: 'Steps',
