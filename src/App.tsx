@@ -45,8 +45,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AuthRoute() {
   const { user } = useAuth();
   const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isEmailConfirmationReturn = searchParams.get('verified') === 'true';
+
+  // Let the confirmation page render even when Supabase has already created a
+  // session. Otherwise authenticated users are redirected before they ever see
+  // the success state.
+  if (isEmailConfirmationReturn) return <Auth />;
   if (!user) return <Auth />;
-  return <Navigate to={location.search ? `/${location.search}` : '/'} replace />;
+  return <Navigate to="/" replace />;
 }
 
 function LeagueGate({ children }: { children: React.ReactNode }) {
