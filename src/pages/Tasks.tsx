@@ -167,7 +167,7 @@ export default function Tasks() {
               {isSolo
                 ? 'Finish your Solo scorecard setup, then start tracking immediately.'
                 : isLeaderboard
-                  ? 'League rules are set before kickoff. Once the commissioner starts the season, preseason practice opens immediately and the first official leaderboard starts Sunday.'
+                  ? 'League rules are set. Once the commissioner starts the season, the official leaderboard opens immediately.'
                   : 'League rules are set before kickoff. Once the commissioner starts the season, preseason practice opens immediately and the first official matchup starts Sunday.'}
             </p>
             <Button onClick={() => navigate('/league')}>Go to {isSolo ? 'Progress' : 'League'}</Button>
@@ -177,7 +177,7 @@ export default function Tasks() {
             <div className="w-16 h-16 rounded-2xl bg-secondary/15 flex items-center justify-center mx-auto mb-4"><Flag className="w-8 h-8 text-secondary" /></div>
             <p className="text-[10px] uppercase tracking-wider text-secondary font-bold">{isLeaderboard ? 'Leaderboard scheduled' : 'Matchup scheduled'}</p>
             <h2 className="text-xl font-display font-bold mt-1 mb-2">Check-ins unlock {formatWeekKickoff(currentWeek?.start_date)}</h2>
-            <p className="text-muted-foreground mb-6">{isLeaderboard ? 'Everyone starts at zero when the Sunday-to-Saturday scoring week opens.' : 'Your opponent is set, but scoring stays locked until the Sunday-to-Saturday week begins.'}</p>
+            <p className="text-muted-foreground mb-6">{isLeaderboard ? 'Everyone starts at zero when this scoring week opens.' : 'Your opponent is set, but scoring stays locked until the Sunday-to-Saturday week begins.'}</p>
             <Button onClick={() => navigate(isLeaderboard ? '/league' : '/matchup')}>{isLeaderboard ? 'View Leaderboard' : 'View Matchup'}</Button>
           </div>
         ) : !currentSeasonId ? (
