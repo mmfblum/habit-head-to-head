@@ -32,7 +32,7 @@ export function ManageTasksDialog({ open, onOpenChange, seasonId, nextWeekStart,
   const timingDescription = nextWeekStart ? `Changes take effect ${nextWeekStart}` : 'Changes saved';
 
   const handleUpdateConfig = async (configId: string, overrides: TaskConfigOverrides) => {
-    try { await updateConfig.mutateAsync({ configId, updates: { config_overrides: overrides } }); toast.success('Task configuration updated', { description: timingDescription }); }
+    try { await updateConfig.mutateAsync({ configId, updates: { config_overrides: { ...overrides, scoring_mode: 'binary', binary_points: 1 } } }); toast.success('Task configuration updated', { description: timingDescription }); }
     catch { toast.error('Failed to update task'); }
   };
   const handleRemoveTask = async (configId: string, taskName: string) => {
@@ -40,13 +40,13 @@ export function ManageTasksDialog({ open, onOpenChange, seasonId, nextWeekStart,
     catch { toast.error('Failed to remove task'); }
   };
   const handleAddTask = async (template: TaskTemplate) => {
-    try { await addConfig.mutateAsync({ seasonId, taskTemplateId: template.id, configOverrides: getInitialConfig(template) }); toast.success(`${template.name} added`, { description: timingDescription }); }
+    try { await addConfig.mutateAsync({ seasonId, taskTemplateId: template.id, configOverrides: { ...getInitialConfig(template), scoring_mode: 'binary', binary_points: 1 }, maxDailyPoints: 1 }); toast.success(`${template.name} added`, { description: timingDescription }); }
     catch { toast.error('Failed to add task'); }
   };
   const handleAddCustom = async () => {
     if (!newCustomTask?.config.custom_name?.trim()) { toast.error('Give the custom task a name'); return; }
     try {
-      await addConfig.mutateAsync({ seasonId, taskTemplateId: newCustomTask.templateId, configOverrides: newCustomTask.config as never });
+      await addConfig.mutateAsync({ seasonId, taskTemplateId: newCustomTask.templateId, configOverrides: { ...newCustomTask.config, scoring_mode: 'binary', binary_points: 1 } as never, maxDailyPoints: 1 });
       toast.success(`${newCustomTask.config.custom_name} added`, { description: timingDescription });
       setNewCustomTask(undefined);
     } catch { toast.error('Failed to add custom task'); }
@@ -55,11 +55,11 @@ export function ManageTasksDialog({ open, onOpenChange, seasonId, nextWeekStart,
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[88vh] overflow-hidden flex flex-col">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><Settings2 className="w-5 h-5" />Manage League Tasks</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Settings2 className="w-5 h-5" />Manage Daily Tasks</DialogTitle></DialogHeader>
         {nextWeekStart && <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"><Clock className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" /><p className="text-sm text-amber-500">Changes take effect at the start of next week ({nextWeekStart})</p></div>}
 
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-          {configsLoading ? <div className="text-center py-8 text-muted-foreground">Loading tasks...</div> : enabledConfigs.length === 0 ? <div className="text-center py-8"><AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-2" /><p className="text-muted-foreground">No tasks configured yet</p></div> : <div className="space-y-3">{enabledConfigs.map((config) => <TaskConfigCard key={config.id} config={config} isExpanded={expandedConfigId===config.id} onToggleExpand={()=>setExpandedConfigId(expandedConfigId===config.id?null:config.id)} onUpdate={(overrides)=>handleUpdateConfig(config.id,overrides)} onRemove={()=>handleRemoveTask(config.id, String((config.config_overrides as Record<string, unknown> | null)?.custom_name || config.task_template.name))} isUpdating={updateConfig.isPending} isRemoving={removeConfig.isPending} simpleScoring={gameFormat==='solo'} />)}</div>}
+          {configsLoading ? <div className="text-center py-8 text-muted-foreground">Loading tasks...</div> : enabledConfigs.length === 0 ? <div className="text-center py-8"><AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-2" /><p className="text-muted-foreground">No tasks configured yet</p></div> : <div className="space-y-3">{enabledConfigs.map((config) => <TaskConfigCard key={config.id} config={config} isExpanded={expandedConfigId===config.id} onToggleExpand={()=>setExpandedConfigId(expandedConfigId===config.id?null:config.id)} onUpdate={(overrides)=>handleUpdateConfig(config.id,overrides)} onRemove={()=>handleRemoveTask(config.id, String((config.config_overrides as Record<string, unknown> | null)?.custom_name || config.task_template.name))} isUpdating={updateConfig.isPending} isRemoving={removeConfig.isPending} simpleScoring />)}</div>}
 
           <AnimatePresence>{showAddTask && <motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} className="overflow-hidden"><div className="border border-dashed border-border rounded-xl p-4 space-y-5">
             <div className="flex items-center justify-between"><div><h4 className="font-medium">Add tasks</h4><p className="text-xs text-muted-foreground">Use defaults or create as many league-specific tasks as you want.</p></div><Button variant="ghost" size="icon" onClick={()=>setShowAddTask(false)}><X className="w-4 h-4"/></Button></div>
