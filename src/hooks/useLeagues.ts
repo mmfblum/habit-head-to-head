@@ -158,7 +158,7 @@ export function useConfigureSeasonTasks() {
         season_id: seasonId,
         task_template_id: config.task_template_id,
         config_overrides: config.config_overrides || {},
-        max_daily_points: config.max_daily_points || 100,
+        max_daily_points: config.max_daily_points ?? 1,
         display_order: config.display_order,
         is_enabled: true,
       }));
