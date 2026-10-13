@@ -47,6 +47,20 @@ export function getManualGoalCheckinValue(
   const target = dailyLimit ?? numericConfig(config, 'target', 'threshold');
   if (target === undefined) return null;
 
+  if (task.input_type === 'time') {
+    const targetTime = typeof config.target_time === 'string' ? config.target_time : undefined;
+    const targetMinutes = timeToMinutes(targetTime);
+    if (targetMinutes === null || !targetTime) return null;
+
+    const direction = task.scoring_type === 'time_after' ? 1 : -1;
+    const chosenMinutes = hitGoal
+      ? targetMinutes
+      : (targetMinutes + direction + 1440) % 1440;
+    const hours = Math.floor(chosenMinutes / 60);
+    const minutes = chosenMinutes % 60;
+    return { time_value: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}` };
+  }
+
   const missStep = Math.max(1, numericConfig(config, 'unit_size') ?? 1);
   const rawValue = hitGoal
     ? target
