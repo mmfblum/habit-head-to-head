@@ -52,7 +52,7 @@ export function getManualGoalCheckinValue(
     const targetMinutes = timeToMinutes(targetTime);
     if (targetMinutes === null || !targetTime) return null;
 
-    const direction = task.scoring_type === 'time_after' ? 1 : -1;
+    const direction = task.scoring_type === 'time_after' ? -1 : 1;
     const chosenMinutes = hitGoal
       ? targetMinutes
       : (targetMinutes + direction + 1440) % 1440;
