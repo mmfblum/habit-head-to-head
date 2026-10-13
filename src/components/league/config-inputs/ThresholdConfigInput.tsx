@@ -9,6 +9,7 @@ interface ThresholdConfigInputProps {
   min?: number;
   max?: number;
   description?: string;
+  step?: number;
 }
 
 export function ThresholdConfigInput({
@@ -19,6 +20,7 @@ export function ThresholdConfigInput({
   min = 1,
   max = 999,
   description,
+  step = 1,
 }: ThresholdConfigInputProps) {
   return (
     <div className="space-y-2">
@@ -30,9 +32,13 @@ export function ThresholdConfigInput({
         <Input
           type="number"
           value={value}
-          onChange={(e) => onChange(Math.max(min, Math.min(max, parseInt(e.target.value) || min)))}
+          onChange={(e) => {
+            const parsed = Number.parseFloat(e.target.value);
+            if (Number.isFinite(parsed)) onChange(Math.max(min, Math.min(max, parsed)));
+          }}
           min={min}
           max={max}
+          step={step}
           className="w-24"
         />
         <span className="text-sm text-muted-foreground">{unit}</span>
