@@ -191,9 +191,9 @@ export function useLeagueDetails(leagueId?: string) {
         };
       });
 
-      if (gameFormat === 'leaderboard') {
+      if (gameFormat === 'leaderboard' || gameFormat === 'solo') {
         membersWithDetails.sort((a, b) =>
-          b.championship_points - a.championship_points || b.total_points - a.total_points
+          b.total_points - a.total_points || b.weekly_points - a.weekly_points
         );
       } else {
         membersWithDetails.sort((a, b) =>
