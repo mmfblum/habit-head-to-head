@@ -46,7 +46,7 @@ export function createDefaultCustomChallenge(templates: TaskTemplate[]): CustomC
       custom_name: '',
       custom_description: '',
       scoring_mode: 'binary',
-      binary_points: 3,
+      binary_points: 1,
     },
   };
 }
@@ -74,7 +74,7 @@ export function CustomChallengeBuilder({ templates, value, onChange, idPrefix = 
         custom_name: currentName,
         custom_description: currentDescription,
         scoring_mode: 'binary',
-        binary_points: 3,
+        binary_points: 1,
       },
     });
   };
