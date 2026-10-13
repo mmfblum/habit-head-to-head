@@ -25,11 +25,8 @@ export default function Auth() {
       setMode('reset');
     } else if (searchParams.get('verified') === 'true') {
       setMode('verified');
-      if (user?.email_confirmed_at) {
-        setTimeout(() => navigate('/'), 2000);
-      }
     }
-  }, [searchParams, session, user, navigate]);
+  }, [searchParams, session]);
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -159,9 +156,14 @@ export default function Auth() {
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.2 }} className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-10 h-10 text-primary" />
           </motion.div>
-          <h1 className="text-2xl font-display font-bold mb-2">Email Verified!</h1>
-          <p className="text-muted-foreground mb-6">Your account is now active. Redirecting you...</p>
-          <Button onClick={() => navigate('/')} className="w-full max-w-xs">Continue to App</Button>
+          <h1 className="text-2xl font-display font-bold mb-2">Email confirmed</h1>
+          <p className="text-muted-foreground mb-6">Your account is ready.</p>
+          <Button
+            onClick={() => navigate(user ? '/' : '/auth', { replace: true })}
+            className="w-full max-w-xs"
+          >
+            {user ? 'Continue to Zrizin' : 'Continue to Sign In'}
+          </Button>
         </motion.div>
       </div>
     );
