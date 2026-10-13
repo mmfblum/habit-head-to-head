@@ -66,7 +66,16 @@ export function getConfiguredTaskName(template: TaskTemplate, config: TaskConfig
   const target = config.target ?? config.threshold
     ?? defaultNumber(template, 'target', 'threshold');
 
-  if (target === undefined || target <= 0) return baseName;
+  if (target === undefined || target <= 0) {
+    if (customName) return customName;
+    switch (template.name) {
+      case 'Something New': return 'Do Something New';
+      case 'Healthy Eating': return 'No Junk Food Today';
+      case 'Stopped Eating After 8 PM': return 'No Eating After 8 PM';
+      case 'Journaling': return 'Journal Today';
+      default: return baseName;
+    }
+  }
 
   const amount = formatAmount(target);
 
