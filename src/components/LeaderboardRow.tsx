@@ -71,17 +71,15 @@ export function LeaderboardRow({
         <p className="text-xs text-muted-foreground">
           {competitionFormat === 'head_to_head'
             ? `${record} ${user.ties > 0 ? 'W-L-T' : 'W-L'}`
-            : `${user.weeklyScore.toLocaleString()} pts this week`}
+            : `${user.weeklyScore.toLocaleString()} points this week`}
         </p>
       </div>
       <div className="text-right">
         <p className="score-text text-lg">{user.seasonScore.toLocaleString()}</p>
         <p className="text-xs text-muted-foreground">
-          {competitionFormat === 'leaderboard'
-            ? 'champ pts'
-            : competitionFormat === 'solo'
-              ? 'season pts'
-              : `${user.weeklyScore.toLocaleString()} this week`}
+          {competitionFormat === 'leaderboard' || competitionFormat === 'solo'
+            ? 'season points'
+            : `${user.weeklyScore.toLocaleString()} this week`}
         </p>
       </div>
     </motion.div>
