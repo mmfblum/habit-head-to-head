@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trophy, Zap, Users, ArrowLeft, Mail, CheckCircle2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
-type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset' | 'verify-email' | 'verified';
+type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset' | 'verify-email' | 'verified' | 'verification-error';
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
@@ -21,8 +21,17 @@ export default function Auth() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const authError =
+      searchParams.get('error_description')
+      || searchParams.get('error')
+      || hashParams.get('error_description')
+      || hashParams.get('error');
+
     if (searchParams.get('mode') === 'reset' && session) {
       setMode('reset');
+    } else if (authError) {
+      setMode('verification-error');
     } else if (searchParams.get('verified') === 'true') {
       setMode('verified');
     }
@@ -148,6 +157,23 @@ export default function Auth() {
       toast.success('Verification email sent! Check your inbox.');
     }
   };
+
+  if (mode === 'verification-error') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 pb-24">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-sm">
+          <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
+            <Mail className="w-10 h-10 text-muted-foreground" />
+          </div>
+          <h1 className="text-2xl font-display font-bold mb-2">Verification link expired</h1>
+          <p className="text-muted-foreground mb-6">This link is no longer valid. If your email was already confirmed, you can sign in normally.</p>
+          <Button onClick={() => navigate('/auth', { replace: true })} className="w-full max-w-xs">
+            Go to Sign In
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (mode === 'verified') {
     return (
