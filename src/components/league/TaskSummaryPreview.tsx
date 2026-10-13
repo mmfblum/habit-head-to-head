@@ -43,8 +43,6 @@ export function TaskSummaryPreview({ templates, configs, customTasks = [] }: Tas
       <CardContent className="space-y-2">
         {rows.map(({ key, template, config }) => {
           const displayName = getConfiguredTaskName(template, config);
-          const isGoalScoring = config.scoring_mode === 'binary';
-
           return (
             <div key={key} className="py-3 px-3 rounded-xl bg-background/60 border border-border/50">
               <div className="flex items-center justify-between gap-2">
@@ -55,7 +53,7 @@ export function TaskSummaryPreview({ templates, configs, customTasks = [] }: Tas
                   <span className="text-sm font-semibold truncate">{displayName}</span>
                 </div>
                 <Badge variant="outline" className="text-[10px] shrink-0">
-                  {isGoalScoring ? 'Goal' : 'Performance'}
+                  1 point
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-2 pl-8">
@@ -68,7 +66,7 @@ export function TaskSummaryPreview({ templates, configs, customTasks = [] }: Tas
         <div className="pt-3 mt-2 border-t border-border/50 flex items-start gap-2">
           <Target className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
-            Goal scoring keeps tasks equally weighted; Performance scoring lets extra effort add more.
+            Every task is equally weighted. Complete the goal for 1 point; miss it for 0.
           </p>
         </div>
       </CardContent>
