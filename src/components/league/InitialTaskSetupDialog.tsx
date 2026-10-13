@@ -74,7 +74,7 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
       if (!template) return;
       const baseConfig = getInitialConfig(template);
       const overrides = pack.overrides?.[taskName] || {};
-      next.set(template.id, { ...baseConfig, ...overrides, scoring_mode: 'binary' });
+      next.set(template.id, { ...baseConfig, ...overrides, scoring_mode: 'binary', binary_points: 1 });
     });
 
     return next;
@@ -93,13 +93,13 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
     setTaskConfigs((previous) => {
       const next = new Map(previous);
       if (next.has(taskId)) next.delete(taskId);
-      else next.set(taskId, getInitialConfig(template));
+      else next.set(taskId, { ...getInitialConfig(template), scoring_mode: 'binary', binary_points: 1 });
       return next;
     });
   };
 
   const handleUpdateConfig = (taskId: string, config: TaskConfigOverrides) => {
-    setTaskConfigs((previous) => new Map(previous).set(taskId, config));
+    setTaskConfigs((previous) => new Map(previous).set(taskId, { ...config, scoring_mode: 'binary', binary_points: 1 }));
   };
 
   const handleCustomChallenge = (value: CustomChallengeValue | undefined) => {
@@ -140,7 +140,7 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
       }));
 
       await configureTasks.mutateAsync({ seasonId, taskConfigs: taskConfigArray });
-      toast.success('League rules saved.');
+      toast.success('Scorecard saved.');
       onOpenChange(false);
       onComplete?.();
     } catch {
@@ -157,7 +157,7 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
             Build the Daily Game
           </DialogTitle>
           <DialogDescription>
-            Classic Zrizin is loaded for you. Keep it, choose another starter pack, or personalize anything below.
+            Start with a pack or build your own. Every completed daily goal is worth 1 point.
           </DialogDescription>
         </DialogHeader>
 
@@ -195,6 +195,7 @@ export function InitialTaskSetupDialog({ open, onOpenChange, seasonId, onComplet
               onUpdateConfig={handleUpdateConfig}
               onClearAll={handleClearAll}
               minRequired={3}
+              simpleScoring
             />
           )}
 
