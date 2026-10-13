@@ -137,8 +137,8 @@ export function DailyCheckinList({ tasks, date, isLoading, weekId, powerPlayEnab
       ) : (
         <div className="rounded-2xl border border-primary/25 bg-primary/5 p-5 text-center">
           <CheckCircle2 className="w-8 h-8 text-primary mx-auto" />
-          <p className="font-display font-bold mt-2">Today’s active card is clear</p>
-          <p className="text-xs text-muted-foreground mt-1">Everything you logged has moved into Completed below.</p>
+          <p className="font-display font-bold mt-2">Today’s card is logged</p>
+          <p className="text-xs text-muted-foreground mt-1">Everything you logged has moved below. You can still open a task and change it.</p>
         </div>
       )}
 
@@ -147,7 +147,7 @@ export function DailyCheckinList({ tasks, date, isLoading, weekId, powerPlayEnab
           <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-3 select-none">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span className="font-semibold text-sm">Completed</span>
+              <span className="font-semibold text-sm">Logged</span>
               <span className="text-xs text-muted-foreground">{completedTasks.length}</span>
             </div>
             <span className="text-xs text-muted-foreground group-open:hidden">Show</span>
