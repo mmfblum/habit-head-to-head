@@ -301,7 +301,7 @@ export default function Dashboard() {
                   <p className="text-xs text-muted-foreground">
                     {totalMembers < 2
                       ? `Invite another player to start the race. Code: ${leagueDetails.invite_code ?? 'N/A'}`
-                      : 'Your players are in. Start the season from the League tab to open Week 1.'}
+                      : 'Your players are in. Start the season from the League tab and Week 1 opens immediately.'}
                   </p>
                 </div>
                 <button
@@ -440,7 +440,7 @@ export default function Dashboard() {
               <p className="text-xs text-muted-foreground mt-1">
                 {hasActiveSeason && weekPhase === 'scheduled'
                   ? isLeaderboard
-                    ? 'The leaderboard opens Sunday. Everyone starts the week at zero.'
+                    ? 'The leaderboard goes live as soon as the commissioner starts it.'
                     : 'Your matchup is set. Week 1 begins on Sunday.'
                   : isLiveWeek ? 'Open Tasks to review your league setup.' : 'Finish league setup to begin earning points.'}
               </p>
