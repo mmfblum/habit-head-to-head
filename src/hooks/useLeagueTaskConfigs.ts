@@ -149,7 +149,7 @@ export function useAddTaskConfig() {
       seasonId,
       taskTemplateId,
       configOverrides = {},
-      maxDailyPoints = 100,
+      maxDailyPoints = 1,
     }: {
       seasonId: string;
       taskTemplateId: string;
