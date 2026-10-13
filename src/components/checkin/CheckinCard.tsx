@@ -15,7 +15,6 @@ import { ConfirmationButton } from './ConfirmationButton';
 import { ScoreCelebration } from './ScoreCelebration';
 import {
   buildVerifiedMetadata,
-  createTimeCaptureMetadata,
   getVerificationConfig,
   validateCheckinValue,
 } from '@/lib/verification';
@@ -175,14 +174,6 @@ export function CheckinCard({
     await handleSubmit(value, 'manual', true);
   };
 
-  const handleTimestampAction = async () => {
-    const now = new Date();
-    const timeString = now.toTimeString().slice(0, 5);
-    const actionType = verificationConfig.confirmation_action === 'going_to_bed' ? 'bedtime' : 'wake';
-    const metadata = createTimeCaptureMetadata(actionType, existingMetadata);
-    await handleSubmit({ time_value: timeString }, 'manual', true, metadata);
-  };
-
   const handleBinaryChange = async (newValue: boolean) => {
     const checkinValue: CheckinValue = { boolean_value: newValue };
     setValue((previous) => ({ ...previous, ...checkinValue }));
@@ -219,8 +210,7 @@ export function CheckinCard({
     }
   };
 
-  const showTimestampButton = false;
-  const needsScoreButton = needsConfirmation && task.input_type !== 'binary' && !showTimestampButton;
+  const needsScoreButton = needsConfirmation && task.input_type !== 'binary';
   const needsBinaryConfirmation = needsConfirmation && task.input_type === 'binary' && verificationConfig.requires_confirmation;
   const confirmationAction = needsScoreButton ? 'log_score' : verificationConfig.confirmation_action || 'confirm';
 
@@ -264,11 +254,7 @@ export function CheckinCard({
               )}
             </AnimatePresence>
 
-            {verificationConfig.auto_import_only ? (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground"><Shield className="w-4 h-4" /><span>This score syncs from your connected device source.</span></div>
-            ) : showTimestampButton ? (
-              <ConfirmationButton confirmationAction={verificationConfig.confirmation_action || 'confirm'} isConfirmed={isCompleted && isVerified} onConfirm={handleTimestampAction} disabled={isPending} capturesTimestamp />
-            ) : canQuickScoreGoal ? (
+            {canQuickScoreGoal ? (
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2"><Button variant="outline" className="h-11" onClick={() => handleQuickGoal(false)} disabled={isPending}>Missed</Button><Button className="h-11 font-bold" onClick={() => handleQuickGoal(true)} disabled={isPending}>{powerPlayArmed ? `Done +${goalPoints * 2} ⚡` : `Done +${goalPoints}`}</Button></div>
                 <p className="text-[11px] text-center text-muted-foreground">Tap Done or Missed. Exact entry is optional.</p>
