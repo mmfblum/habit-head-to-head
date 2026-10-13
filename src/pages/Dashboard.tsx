@@ -363,7 +363,7 @@ export default function Dashboard() {
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm">{totalMembers > 1 ? 'Invite more friends' : 'Invite friends to this scorecard'}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Same tasks · 3 points per completed goal · no head-to-head
+                Same tasks · 1 point per completed goal · no head-to-head
               </p>
             </div>
             <span className="text-[10px] font-mono text-secondary shrink-0">{leagueDetails.invite_code.toUpperCase()}</span>
