@@ -290,7 +290,7 @@ export default function League() {
                   {isLeaderboard
                     ? 'The board opens Sunday. Everyone scores the same daily game and races for #1.'
                     : isSolo
-                      ? 'Everyone in this Solo scorecard uses the same tasks. Completed goals earn 3 points and the leaderboard updates live.'
+                      ? 'Everyone in this Solo scorecard uses the same tasks. Completed goals earn 1 point and the leaderboard updates live.'
                       : 'The matchups are locked in. Scoring, power plays, and taunts open Sunday.'}
                 </p>
               </div>
