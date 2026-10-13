@@ -180,10 +180,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       if (next.has(taskId)) next.delete(taskId);
       else {
         const initial = getInitialConfig(template);
-        next.set(taskId, formData.gameFormat === 'solo'
-          ? { ...initial, scoring_mode: 'binary', binary_points: 3 }
-          : initial
-        );
+        next.set(taskId, { ...initial, scoring_mode: 'binary', binary_points: 1 });
       }
       return next;
     });
@@ -192,10 +189,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const handleUpdateConfig = (taskId: string, config: TaskConfigOverrides) => {
     setTaskConfigs((previous) => {
       const next = new Map(previous);
-      next.set(taskId, formData.gameFormat === 'solo'
-        ? { ...config, scoring_mode: 'binary', binary_points: 3 }
-        : config
-      );
+      next.set(taskId, { ...config, scoring_mode: 'binary', binary_points: 1 });
       return next;
     });
   };
@@ -208,11 +202,9 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const handleQuickStart = (packId: StarterPackId) => {
     if (!groupedTemplates) return;
     const next = buildStarterPack(packId);
-    if (formData.gameFormat === 'solo') {
-      next.forEach((config, taskId) => {
-        next.set(taskId, { ...config, scoring_mode: 'binary', binary_points: 3 });
-      });
-    }
+    next.forEach((config, taskId) => {
+      next.set(taskId, { ...config, scoring_mode: 'binary', binary_points: 1 });
+    });
     setTaskConfigs(next);
     setDefaultPackLoaded(true);
     toast.success(`${STARTER_PACKS[packId].label} loaded. Your custom tasks stayed in place.`);
@@ -254,20 +246,21 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
       if (!season) return;
 
-      const normalizeSoloConfig = (config: TaskConfigOverrides) =>
-        formData.gameFormat === 'solo'
-          ? { ...config, scoring_mode: 'binary' as const, binary_points: 3 }
-          : config;
+      const normalizeSimpleConfig = (config: TaskConfigOverrides) => ({
+        ...config,
+        scoring_mode: 'binary' as const,
+        binary_points: 1,
+      });
 
       const standardConfigs = Array.from(taskConfigs.entries()).map(([taskId, config], index) => ({
         task_template_id: taskId,
         display_order: index,
-        config_overrides: serializeConfig(normalizeSoloConfig(config)),
+        config_overrides: serializeConfig(normalizeSimpleConfig(config)),
       }));
       const customConfigs = customTasks.map((entry, index) => ({
         task_template_id: entry.value.templateId,
         display_order: standardConfigs.length + index,
-        config_overrides: serializeConfig(normalizeSoloConfig(entry.value.config)),
+        config_overrides: serializeConfig(normalizeSimpleConfig(entry.value.config)),
       }));
 
       await configureTasks.mutateAsync({
@@ -489,11 +482,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 <div className="text-center mb-4">
                   <Zap className="w-12 h-12 text-secondary mx-auto mb-3" />
                   <h3 className="text-xl font-display font-bold">{isSolo ? 'Choose Your Daily Goals' : 'What Scores Each Day?'}</h3>
-                  <p className="text-muted-foreground">Pick the habits you actually want to be accountable for. Start with a pack, tap tasks on or off, and change any target.</p>
+                  <p className="text-muted-foreground">Pick the habits you want to play every day. Every task can be completed manually in this version, and every completed goal is worth 1 point.</p>
                 </div>
 
                 <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
-                  <p className="font-semibold text-sm">Scoring is simple by default</p>
+                  <p className="font-semibold text-sm">Every task is worth 1 point</p>
                   <div className="grid grid-cols-3 gap-3 mt-3 text-center">
                     <div>
                       <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">1</div>
@@ -501,7 +494,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     </div>
                     <div>
                       <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">2</div>
-                      <p className="text-xs mt-2">Hit it for +3</p>
+                      <p className="text-xs mt-2">Hit it for +1</p>
                     </div>
                     <div>
                       <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center mx-auto">3</div>
@@ -509,9 +502,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-3">
-                    {isSolo
-                      ? 'Every goal is equally weighted: complete it for 3 points, miss it for 0. Change the goal itself anytime before you start.'
-                      : 'When you change a quantity, the task name changes too—for example, Pushups set to 30 becomes “30 Pushups.”'}
+                    Every goal is equally weighted: complete it for 1 point, miss it for 0. Change a quantity and the live task title changes too—for example, Pushups set to 30 becomes “30 Pushups.”
                   </p>
                 </div>
 
@@ -556,7 +547,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                       onUpdateConfig={handleUpdateConfig}
                       onClearAll={handleClearAll}
                       minRequired={3}
-                      simpleScoring={isSolo}
+                      simpleScoring
                     />
                   )}
                 </section>
