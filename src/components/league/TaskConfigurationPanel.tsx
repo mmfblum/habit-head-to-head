@@ -83,15 +83,29 @@ export function TaskConfigurationPanel({
     || template.scoring_type === 'threshold'
     || hasTimeGoal;
 
-  const unitLabel = template.unit === 'steps' ? 'steps' :
+  const unitLabel = template.name === 'Pushups' ? 'reps' :
+    template.name === 'Water Intake' ? 'glasses' :
+    template.unit === 'steps' ? 'steps' :
     template.unit === 'minutes' ? 'minutes' :
+    template.unit === 'hours' ? 'hours' :
     template.unit === 'pages' ? 'pages' :
-    template.unit === 'count' ? 'times' : template.unit;
+    template.unit === 'count' ? 'count' : template.unit;
 
   const currentTargetTime = config.target_time ?? String(getDefaultValue(template, 'target_time') ?? '07:00');
-  const currentThreshold = config.threshold
+  const hasDailyLimit = config.daily_limit_minutes !== undefined || template.name === 'Screen Time';
+  const currentThreshold = config.daily_limit_minutes
+    ?? config.threshold
     ?? config.target
-    ?? Number(getDefaultValue(template, 'threshold') ?? getDefaultValue(template, 'target') ?? 30);
+    ?? Number(
+      getDefaultValue(template, 'daily_limit_minutes')
+      ?? getDefaultValue(template, 'threshold')
+      ?? getDefaultValue(template, 'target')
+      ?? 30
+    );
+  const goalStep = template.unit === 'hours' ? 0.5
+    : template.unit === 'steps' ? 500
+      : template.unit === 'minutes' ? 5
+        : 1;
   const currentPoints = config.points
     ?? Number(
       getDefaultValue(template, 'points')
@@ -139,17 +153,23 @@ export function TaskConfigurationPanel({
                   <TimeConfigInput
                     value={currentTargetTime}
                     onChange={(value) => updateField('target_time', value)}
-                    label={template.name.toLowerCase().includes('wake') ? 'Wake by' : 'Complete by'}
+                    label={template.name.toLowerCase().includes('wake') ? 'Wake by' : template.name.toLowerCase().includes('bed') ? 'Bed by' : 'Complete by'}
                   />
                 ) : (
                   <ThresholdConfigInput
                     value={currentThreshold}
                     onChange={(value) => {
-                      if (template.scoring_type === 'linear_per_unit') updateField('target', value);
-                      else updateField('threshold', value);
+                      if (hasDailyLimit) {
+                        onChange({ ...config, daily_limit_minutes: value, target: value });
+                      } else if (template.scoring_type === 'linear_per_unit') {
+                        updateField('target', value);
+                      } else {
+                        updateField('threshold', value);
+                      }
                     }}
                     unit={unitLabel}
-                    label="Hit this each day"
+                    label={hasDailyLimit ? 'Stay at or under' : 'Complete at least'}
+                    step={goalStep}
                     min={Number(template.min_value ?? 0)}
                     max={Number(template.max_value ?? 100000)}
                   />
