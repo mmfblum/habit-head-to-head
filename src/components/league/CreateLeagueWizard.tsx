@@ -132,9 +132,10 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    // Solo is intentionally not created yet. The user must choose and confirm
-    // their goals first so onboarding cannot be short-circuited by LeagueGate.
-    if (formData.gameFormat === 'solo') {
+    // Solo and Leaderboard both require the player to choose and confirm the
+    // daily scorecard before we create anything. This prevents onboarding from
+    // being short-circuited by LeagueGate and makes the rules explicit up front.
+    if (formData.gameFormat === 'solo' || formData.gameFormat === 'leaderboard') {
       setTaskConfigs(classic);
       setDefaultPackLoaded(true);
       setStep('tasks');
@@ -226,11 +227,11 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       let league = createdLeague;
       let season = createdSeason;
 
-      if (formData.gameFormat === 'solo' && !season) {
+      if ((formData.gameFormat === 'solo' || formData.gameFormat === 'leaderboard') && !season) {
         league = await createLeague.mutateAsync({
           name: formData.name,
           description: formData.description,
-          gameFormat: 'solo',
+          gameFormat: formData.gameFormat,
         });
 
         season = await createSeason.mutateAsync({
@@ -280,7 +281,13 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
       toast.success('Your game is set. Now bring in the competition.');
     } catch (error) {
       console.error(error);
-      toast.error(formData.gameFormat === 'solo' ? 'Failed to create your Solo scorecard' : 'Failed to save league rules');
+      toast.error(
+        formData.gameFormat === 'solo'
+          ? 'Failed to create your Solo scorecard'
+          : formData.gameFormat === 'leaderboard'
+            ? 'Failed to create your Leaderboard league'
+            : 'Failed to save league rules'
+      );
     }
   };
 
@@ -319,16 +326,22 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
         { id: 'details', label: 'Solo', icon: UserRound },
         { id: 'tasks', label: 'Goals', icon: Gamepad2 },
       ]
-    : step === 'tasks'
+    : isLeaderboard
       ? [
           { id: 'details', label: 'League', icon: Trophy },
-          { id: 'tasks', label: 'Game', icon: Gamepad2 },
+          { id: 'tasks', label: 'Tasks', icon: Gamepad2 },
           { id: 'invite', label: 'Friends', icon: Users },
         ]
-      : [
-          { id: 'details', label: 'League', icon: Trophy },
-          { id: 'invite', label: 'Friends', icon: Users },
-        ];
+      : step === 'tasks'
+        ? [
+            { id: 'details', label: 'League', icon: Trophy },
+            { id: 'tasks', label: 'Game', icon: Gamepad2 },
+            { id: 'invite', label: 'Friends', icon: Users },
+          ]
+        : [
+            { id: 'details', label: 'League', icon: Trophy },
+            { id: 'invite', label: 'Friends', icon: Users },
+          ];
   const currentStepIndex = steps.findIndex((item) => item.id === step);
 
   return (
@@ -342,7 +355,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   <ChevronLeft className="w-4 h-4 mr-1" />
                   Cancel
                 </Button>
-              ) : isSolo && step === 'tasks' && !createdSeason ? (
+              ) : (isSolo || isLeaderboard) && step === 'tasks' && !createdSeason ? (
                 <Button variant="ghost" size="sm" onClick={() => setStep('details')}>
                   <ChevronLeft className="w-4 h-4 mr-1" />
                   Back
@@ -471,7 +484,13 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <Button onClick={handleDetailsSubmit} className="w-full" size="lg" disabled={createLeague.isPending || createSeason.isPending || configureTasks.isPending || tasksLoading}>
-                  {createLeague.isPending || createSeason.isPending || configureTasks.isPending ? 'Creating...' : isSolo ? 'Choose My Goals' : 'Create League'}
+                  {createLeague.isPending || createSeason.isPending || configureTasks.isPending
+                    ? 'Creating...'
+                    : isSolo
+                      ? 'Choose My Goals'
+                      : isLeaderboard
+                        ? 'Choose League Tasks'
+                        : 'Create League'}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </motion.div>
@@ -535,7 +554,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                 <section className="space-y-3">
                   <div>
                     <h4 className="font-display font-semibold">Choose the core tasks</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Tap a task to add it. Open “Goal & scoring” to change the target; the task title updates with the new quantity.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Tap a task to add it. Open “Edit goal” to change the target; the task title updates with the new quantity.</p>
                   </div>
                   {tasksLoading ? (
                     <div className="text-center py-8 text-muted-foreground">Loading tasks...</div>
@@ -558,7 +577,13 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
 
                 <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-background via-background to-transparent">
                   <Button onClick={handleTasksSubmit} className="w-full" size="lg" disabled={taskCount < 3 || createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending}>
-                    {createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending ? 'Saving...' : isSolo ? `Create My Solo Scorecard · ${taskCount} Tasks` : 'Use This Scorecard & Invite Friends'}
+                    {createLeague.isPending || createSeason.isPending || configureTasks.isPending || startSeason.isPending
+                      ? 'Saving...'
+                      : isSolo
+                        ? `Create My Solo Scorecard · ${taskCount} Tasks`
+                        : isLeaderboard
+                          ? `Create Leaderboard · ${taskCount} Tasks`
+                          : 'Use This Scorecard & Invite Friends'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                   {taskCount < 3 && <p className="text-center text-sm text-muted-foreground mt-2">Choose at least 3 scoring tasks to continue</p>}
