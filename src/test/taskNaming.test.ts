@@ -5,7 +5,7 @@ import type { TaskTemplate } from '@/hooks/useTaskTemplates';
 function template(overrides: Partial<TaskTemplate>): TaskTemplate {
   return {
     id: 'template-1',
-    name: 'Daily Steps',
+    name: 'Steps',
     description: null,
     category: 'fitness',
     icon: 'footprints',
@@ -18,7 +18,7 @@ function template(overrides: Partial<TaskTemplate>): TaskTemplate {
     is_active: true,
     is_premium: false,
     version: 1,
-    supports_integration: true,
+    supports_integration: false,
     allowed_data_sources: ['manual'],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -26,65 +26,90 @@ function template(overrides: Partial<TaskTemplate>): TaskTemplate {
   };
 }
 
-describe('plain-English task scoring', () => {
-  it('uses the custom name together with its configured quantity', () => {
-    const custom = template({
-      name: 'Custom Challenge — Minutes',
-      category: 'custom',
-      input_type: 'duration',
-      unit: 'minutes',
-      scoring_type: 'threshold',
-      default_config: { threshold: 20 },
-    });
+describe('player-facing task names', () => {
+  const cases: Array<{
+    name: string;
+    template: Partial<TaskTemplate>;
+    config: Record<string, unknown>;
+    expected: string;
+  }> = [
+    {
+      name: 'pushups',
+      template: { name: 'Pushups', unit: 'count', input_type: 'numeric' },
+      config: { target: 30 },
+      expected: '30 Pushups',
+    },
+    {
+      name: 'steps',
+      template: { name: 'Steps', unit: 'steps', input_type: 'numeric' },
+      config: { target: 10000 },
+      expected: '10,000 Steps',
+    },
+    {
+      name: 'workout',
+      template: { name: 'Workout', unit: 'minutes', input_type: 'duration' },
+      config: { threshold: 30 },
+      expected: '30 min Workout',
+    },
+    {
+      name: 'reading',
+      template: { name: 'Reading', unit: 'pages', input_type: 'numeric' },
+      config: { target: 20 },
+      expected: 'Read 20 pages',
+    },
+    {
+      name: 'screen time',
+      template: { name: 'Screen Time', unit: 'minutes', input_type: 'numeric' },
+      config: { daily_limit_minutes: 120 },
+      expected: 'Screen Time ≤ 2 hrs',
+    },
+    {
+      name: 'sleep duration',
+      template: { name: 'Sleep Duration', unit: 'hours', input_type: 'numeric' },
+      config: { threshold: 7 },
+      expected: 'Sleep 7 hrs',
+    },
+    {
+      name: 'water',
+      template: { name: 'Water Intake', unit: 'count', input_type: 'numeric' },
+      config: { threshold: 8 },
+      expected: 'Drink 8 glasses of water',
+    },
+    {
+      name: 'wake time',
+      template: { name: 'Wake Time', unit: 'waketime_time', input_type: 'time', scoring_type: 'time_before' },
+      config: { target_time: '06:30' },
+      expected: 'Wake by 6:30 AM',
+    },
+    {
+      name: 'bedtime',
+      template: { name: 'Bedtime', unit: 'bedtime_time', input_type: 'time', scoring_type: 'time_before' },
+      config: { target_time: '23:00' },
+      expected: 'Bed by 11:00 PM',
+    },
+    {
+      name: 'custom reps',
+      template: { name: 'Custom Challenge — Count', unit: 'count', input_type: 'numeric', category: 'custom' },
+      config: { custom_name: 'Pullups', threshold: 12 },
+      expected: '12 Pullups',
+    },
+  ];
 
-    expect(getConfiguredTaskName(custom, {
-      scoring_mode: 'binary',
-      custom_name: 'Daily Religious Study',
-      threshold: 30,
-      binary_points: 3,
-    })).toBe('30 min Daily Religious Study');
+  cases.forEach((testCase) => {
+    it(`shows the actual ask for ${testCase.name}`, () => {
+      expect(getConfiguredTaskName(
+        template(testCase.template),
+        { scoring_mode: 'binary', binary_points: 1, ...testCase.config }
+      )).toBe(testCase.expected);
+    });
   });
 
-  it('turns a 30-rep Pushups goal into 30 Pushups', () => {
-    const pushups = template({
-      name: 'Pushups',
-      category: 'fitness',
-      input_type: 'numeric',
-      unit: 'count',
-      scoring_type: 'linear_per_unit',
-      default_config: {},
-    });
-
-    expect(getConfiguredTaskName(pushups, {
-      scoring_mode: 'binary',
-      target: 30,
-      binary_points: 3,
-    })).toBe('30 Pushups');
-  });
-
-  it('explains equal-weight goal scoring without engine terminology', () => {
-    const steps = template({});
+  it('always explains the one-point rule', () => {
+    const steps = template({ name: 'Steps' });
     expect(getTaskScoringSentence(steps, {
       scoring_mode: 'binary',
       target: 10000,
-      binary_points: 3,
-    })).toBe('Hit 10,000 steps → +3 pts. Miss it → 0.');
-  });
-
-  it('explains a simple checkoff challenge', () => {
-    const challenge = template({
-      name: 'Custom Challenge — Checkoff',
-      category: 'custom',
-      input_type: 'binary',
-      unit: 'boolean',
-      scoring_type: 'binary_yesno',
-      default_config: {},
-    });
-
-    expect(getTaskScoringSentence(challenge, {
-      scoring_mode: 'binary',
-      custom_name: 'No Dessert',
-      binary_points: 3,
-    })).toBe('Complete it → +3 pts. Miss it → 0.');
+      binary_points: 1,
+    })).toBe('Complete “10,000 Steps” → +1 point. Miss it → 0.');
   });
 });
