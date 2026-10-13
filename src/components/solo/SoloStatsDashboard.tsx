@@ -90,10 +90,9 @@ export function SoloStatsDashboard({
 
       const today = startOfDay(new Date());
       const seasonStartDate = startOfDay(parseISO(seasonStart || weekStart));
-    const memberStartDate = query.data?.joinedAt
-      ? laterDate(seasonStartDate, startOfDay(parseISO(query.data.joinedAt)))
-      : seasonStartDate;
-      const memberStartDate = joinedAt ? startOfDay(parseISO(joinedAt)) : seasonStartDate;
+      const memberStartDate = joinedAt
+        ? laterDate(seasonStartDate, startOfDay(parseISO(joinedAt)))
+        : seasonStartDate;
       const calendarStart = startOfDay(startOfMonth(today));
       const competitionWeekStart = startOfDay(parseISO(weekStart));
       const earliestNeeded = isBefore(calendarStart, competitionWeekStart) ? calendarStart : competitionWeekStart;
@@ -119,6 +118,9 @@ export function SoloStatsDashboard({
     const checkins = query.data?.checkins || [];
     const today = startOfDay(new Date());
     const seasonStartDate = startOfDay(parseISO(seasonStart || weekStart));
+    const memberStartDate = query.data?.joinedAt
+      ? laterDate(seasonStartDate, startOfDay(parseISO(query.data.joinedAt)))
+      : seasonStartDate;
     const parsedWeekStart = startOfDay(parseISO(weekStart));
     const parsedWeekEnd = startOfDay(parseISO(weekEnd));
 
