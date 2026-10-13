@@ -34,7 +34,7 @@ interface TaskConfigurationPanelProps {
 
 export function getInitialConfig(template: TaskTemplate): TaskConfigOverrides {
   const defaults = (template.default_config || {}) as Record<string, unknown>;
-  const defaultBinaryPoints = typeof defaults.binary_points === 'number' ? defaults.binary_points : 3;
+  const defaultBinaryPoints = 1;
 
   return {
     scoring_mode: 'binary',
@@ -54,7 +54,7 @@ export function TaskConfigurationPanel({
   onChange,
   isExpanded,
   onToggleExpand,
-  simpleScoring = false,
+  simpleScoring = true,
 }: TaskConfigurationPanelProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const controlled = isExpanded !== undefined;
@@ -112,7 +112,7 @@ export function TaskConfigurationPanel({
           >
             <span className="flex items-center gap-1.5">
               <Settings2 className="w-3.5 h-3.5" />
-              Goal & scoring
+              Edit goal
             </span>
             {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </Button>
@@ -123,7 +123,7 @@ export function TaskConfigurationPanel({
             {simpleScoring ? (
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
                 <p className="text-xs font-semibold">Simple scoring</p>
-                <p className="text-xs text-muted-foreground mt-1">Hit the daily goal for 3 points. Miss it for 0.</p>
+                <p className="text-xs text-muted-foreground mt-1">Complete the daily goal for 1 point. Miss it for 0.</p>
               </div>
             ) : (
               <ScoringModeToggle
