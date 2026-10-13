@@ -598,7 +598,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                     <Users className="w-8 h-8 text-primary" />
                   </div>
                   <h3 className="text-xl font-display font-bold">Bring in the Competition</h3>
-                  <p className="text-muted-foreground">Your scorecard is ready. Practice opens as soon as the season is scheduled, and official Week 1 starts Sunday.</p>
+                  <p className="text-muted-foreground">{isLeaderboard ? 'Your scorecard is ready. Week 1 begins the second the commissioner starts the league.' : 'Your scorecard is ready. Practice opens as soon as the season is scheduled, and official Week 1 starts Sunday.'}</p>
                 </div>
 
                 {createdLeague?.invite_code && (
@@ -616,7 +616,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
                   <p className="font-semibold">What happens next?</p>
                   <p className="text-muted-foreground mt-1">
                     {isLeaderboard
-                      ? 'Once at least one other player joins, schedule the season. Preseason practice opens immediately and the official leaderboard resets to zero Sunday.'
+                      ? 'Once at least one other player joins, start the season. The leaderboard goes live immediately and everyone begins at zero.'
                       : 'Once at least one opponent joins, schedule Week 1. Everyone can practice immediately; the real matchup starts Sunday and runs through Saturday.'}
                   </p>
                 </div>
