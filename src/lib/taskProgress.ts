@@ -43,9 +43,6 @@ export function getManualGoalCheckinValue(
   hitGoal: boolean
 ): CheckinValue | null {
   const config = asConfig(task);
-  const dailyLimit = numericConfig(config, 'daily_limit_minutes');
-  const target = dailyLimit ?? numericConfig(config, 'target', 'threshold');
-  if (target === undefined) return null;
 
   if (task.input_type === 'time') {
     const targetTime = typeof config.target_time === 'string' ? config.target_time : undefined;
@@ -60,6 +57,10 @@ export function getManualGoalCheckinValue(
     const minutes = chosenMinutes % 60;
     return { time_value: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}` };
   }
+
+  const dailyLimit = numericConfig(config, 'daily_limit_minutes');
+  const target = dailyLimit ?? numericConfig(config, 'target', 'threshold');
+  if (target === undefined) return null;
 
   const missStep = Math.max(1, numericConfig(config, 'unit_size') ?? 1);
   const rawValue = hitGoal
