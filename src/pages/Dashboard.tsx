@@ -5,6 +5,7 @@ import { TaskCard } from '@/components/TaskCard';
 import { LeaderboardRaceCard } from '@/components/leaderboard/LeaderboardRaceCard';
 import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCard';
 import { SoloStatsDashboard } from '@/components/solo/SoloStatsDashboard';
+import { LeagueSwitcher } from '@/components/league/LeagueSwitcher';
 import { WeeklyRecapDialog } from '@/components/recap/WeeklyRecapDialog';
 import { CheckCircle2, ChevronRight, Zap, Bell, UserPlus, Trophy, Target, CalendarDays, ListOrdered } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -56,7 +57,7 @@ function Avatar({ value, alt }: { value: string; alt: string }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
+  const { data: leagueDetails, isLoading: leagueLoading, memberships, selectLeague } = useUserPrimaryLeague();
   const { data: notifications = [] } = useNotifications();
 
   const isLeaderboard = leagueDetails?.game_format === 'leaderboard';
@@ -225,7 +226,12 @@ export default function Dashboard() {
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <p className="text-xs text-muted-foreground">{headerEyebrow}</p>
-            <h1 className="font-display font-bold text-lg">{leagueDetails.name}</h1>
+            <LeagueSwitcher
+              currentLeagueId={leagueDetails.id}
+              currentName={leagueDetails.name}
+              memberships={memberships}
+              onSelect={selectLeague}
+            />
           </div>
           <div className="flex items-center gap-2">
             <button
