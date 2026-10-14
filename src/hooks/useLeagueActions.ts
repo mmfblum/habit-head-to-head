@@ -165,3 +165,37 @@ export function useLeaveLeague() {
     },
   });
 }
+
+
+export function useEndLeague() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (leagueId: string) => {
+      if (!user) throw new Error('Must be logged in');
+
+      const { error } = await supabase.rpc(
+        'end_league' as never,
+        { _league_id: leagueId } as never
+      );
+
+      if (error) throw error;
+      return leagueId;
+    },
+    onSuccess: (leagueId) => {
+      if (user?.id && localStorage.getItem(`zrizin:selected-league:${user.id}`) === leagueId) {
+        localStorage.removeItem(`zrizin:selected-league:${user.id}`);
+        queryClient.setQueryData(['selected-league', user.id], undefined);
+      }
+      toast.success('League ended. Your history is saved.');
+      queryClient.invalidateQueries({ queryKey: ['user-leagues'] });
+      queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+      queryClient.invalidateQueries({ queryKey: ['archived-user-leagues'] });
+      queryClient.invalidateQueries({ queryKey: ['league-details'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to end league');
+    },
+  });
+}
