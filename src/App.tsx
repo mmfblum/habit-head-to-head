@@ -2,7 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { BottomNav } from "./components/BottomNav";
 import { NativePushPrompt } from "./components/NativePushPrompt";
@@ -19,6 +20,7 @@ import NotFound from "./pages/NotFound";
 import CheckinDemo from "./pages/CheckinDemo";
 import Accountability from "./pages/Accountability";
 import { useUserLeagues } from "./hooks/useLeagues";
+import { JoinLeagueDialog } from "./components/league/JoinLeagueDialog";
 import { useUserPrimaryLeague } from "./hooks/useLeagueDetails";
 
 const queryClient = new QueryClient();
@@ -39,7 +41,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to={`/auth${location.search}`} replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <ExistingUserInviteHandler />
+    </>
+  );
 }
 
 function AuthRoute() {
@@ -53,7 +60,32 @@ function AuthRoute() {
   // the success state.
   if (isEmailConfirmationReturn) return <Auth />;
   if (!user) return <Auth />;
-  return <Navigate to="/" replace />;
+  const joinCode = searchParams.get('join');
+  return <Navigate to={joinCode ? `/?join=${encodeURIComponent(joinCode)}` : '/'} replace />;
+}
+
+function ExistingUserInviteHandler() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const joinCode = new URLSearchParams(location.search).get('join')?.trim().toUpperCase() || '';
+  const [open, setOpen] = useState(!!joinCode);
+
+  useEffect(() => {
+    if (joinCode) setOpen(true);
+  }, [joinCode]);
+
+  if (!joinCode) return null;
+
+  return (
+    <JoinLeagueDialog
+      open={open}
+      initialCode={joinCode}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) navigate(location.pathname, { replace: true });
+      }}
+    />
+  );
 }
 
 function LeagueGate({ children }: { children: React.ReactNode }) {
