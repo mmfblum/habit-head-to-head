@@ -41,12 +41,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to={`/auth${location.search}`} replace />;
   }
 
-  return (
-    <>
-      {children}
-      <ExistingUserInviteHandler />
-    </>
-  );
+  return <>{children}</>;
 }
 
 function AuthRoute() {
@@ -117,7 +112,12 @@ function LeagueGate({ children }: { children: React.ReactNode }) {
     return <Onboarding />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <ExistingUserInviteHandler />
+    </>
+  );
 }
 
 function HeadToHeadOnly({ children }: { children: React.ReactNode }) {
