@@ -57,7 +57,8 @@ export default function Auth() {
       }
     } else {
       toast.success('Welcome back!');
-      navigate('/');
+      const joinCode = searchParams.get('join');
+      navigate(joinCode ? `/?join=${encodeURIComponent(joinCode)}` : '/');
     }
   };
 
@@ -185,7 +186,14 @@ export default function Auth() {
           <h1 className="text-2xl font-display font-bold mb-2">Email confirmed</h1>
           <p className="text-muted-foreground mb-6">Your account is ready.</p>
           <Button
-            onClick={() => navigate(user ? '/' : '/auth', { replace: true })}
+            onClick={() => {
+              const joinCode = searchParams.get('join');
+              if (user) {
+                navigate(joinCode ? `/?join=${encodeURIComponent(joinCode)}` : '/', { replace: true });
+              } else {
+                navigate(joinCode ? `/auth?join=${encodeURIComponent(joinCode)}` : '/auth', { replace: true });
+              }
+            }}
             className="w-full max-w-xs"
           >
             {user ? 'Continue to Zrizin' : 'Continue to Sign In'}
