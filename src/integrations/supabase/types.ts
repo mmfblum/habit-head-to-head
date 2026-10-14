@@ -211,9 +211,11 @@ export type Database = {
       }
       leagues: {
         Row: {
+          archived_at: string | null
           created_at: string
           created_by: string | null
           description: string | null
+          game_format: string
           id: string
           invite_code: string | null
           max_custom_tasks: number
@@ -223,9 +225,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          game_format?: string
           id?: string
           invite_code?: string | null
           max_custom_tasks?: number
@@ -235,9 +239,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          game_format?: string
           id?: string
           invite_code?: string | null
           max_custom_tasks?: number

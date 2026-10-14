@@ -1,14 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, Users, Trophy, ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CreateLeagueWizard } from '@/components/league/CreateLeagueWizard';
 import { JoinLeagueDialog } from '@/components/league/JoinLeagueDialog';
 
 export default function Onboarding() {
+  const [searchParams] = useSearchParams();
+  const invitedCode = searchParams.get('join')?.trim().toUpperCase() || '';
   const [showCreateWizard, setShowCreateWizard] = useState(false);
-  const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [showJoinDialog, setShowJoinDialog] = useState(!!invitedCode);
+
+  useEffect(() => {
+    if (invitedCode) setShowJoinDialog(true);
+  }, [invitedCode]);
 
   if (showCreateWizard) {
     return <CreateLeagueWizard onClose={() => setShowCreateWizard(false)} />;
@@ -24,8 +30,13 @@ export default function Onboarding() {
         <Trophy className="w-16 h-16 text-primary mx-auto mb-4" />
         <h1 className="text-3xl font-display font-bold mb-2">Welcome to Zrizin</h1>
         <p className="text-muted-foreground max-w-md">
-          Join or create a league to start competing with friends on daily productivity tasks
+          Turn better habits into a weekly rivalry. Score your day, beat your friends, and win the week.
         </p>
+        {invitedCode && (
+          <div className="mt-4 inline-flex rounded-full border border-secondary/30 bg-secondary/10 px-3 py-1.5 text-xs font-semibold text-secondary">
+            League invitation ready · {invitedCode}
+          </div>
+        )}
       </motion.div>
 
       <motion.div
@@ -48,7 +59,7 @@ export default function Onboarding() {
                   Create a League
                   <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                 </CardTitle>
-                <CardDescription>Start a new league and invite friends</CardDescription>
+                <CardDescription>Start a new league with Classic Zrizin already loaded</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -65,17 +76,21 @@ export default function Onboarding() {
               </div>
               <div className="flex-1">
                 <CardTitle className="font-display flex items-center gap-2">
-                  Join a League
+                  {invitedCode ? 'Open My Invitation' : 'Join a League'}
                   <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                 </CardTitle>
-                <CardDescription>Enter an invite code to join</CardDescription>
+                <CardDescription>{invitedCode ? 'Your invite code is already filled in' : 'Enter an invite code to join'}</CardDescription>
               </div>
             </div>
           </CardHeader>
         </Card>
       </motion.div>
 
-      <JoinLeagueDialog open={showJoinDialog} onOpenChange={setShowJoinDialog} />
+      <JoinLeagueDialog
+        open={showJoinDialog}
+        onOpenChange={setShowJoinDialog}
+        initialCode={invitedCode}
+      />
     </div>
   );
 }

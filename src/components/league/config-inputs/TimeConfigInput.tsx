@@ -1,5 +1,5 @@
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import { ClockTimePicker } from '@/components/ui/clock-time-picker';
 
 interface TimeConfigInputProps {
   value: string;
@@ -12,15 +12,8 @@ export function TimeConfigInput({ value, onChange, label, description }: TimeCon
   return (
     <div className="space-y-2">
       <Label className="text-sm font-medium">{label}</Label>
-      {description && (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      )}
-      <Input
-        type="time"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full"
-      />
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      <ClockTimePicker value={value} onChange={onChange} />
     </div>
   );
 }

@@ -21,6 +21,17 @@ interface UseTaskBreakdownOptions {
   opponentId?: string;
 }
 
+type LeagueTaskRelation = {
+  max_daily_points?: number | null;
+  task_templates?: {
+    icon?: string | null;
+  } | null;
+} | null;
+
+type RealtimeScoringPayload = {
+  user_id?: string | null;
+};
+
 export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTaskBreakdownOptions) {
   const queryClient = useQueryClient();
   const queryKey = ['task-breakdown', seasonId, weekId, userId, opponentId];
@@ -30,7 +41,6 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
     queryFn: async (): Promise<TaskProgress[]> => {
       if (!seasonId || !weekId || !userId || !opponentId) return [];
 
-      // 1. Get all task instances for the season
       const { data: taskInstances, error: taskError } = await supabase
         .from('task_instances')
         .select(`
@@ -50,16 +60,15 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
 
       if (taskError) throw taskError;
 
-      // 2. Get scoring events for both users this week
       const { data: scoringEvents, error: scoreError } = await supabase
         .from('scoring_events')
         .select('task_instance_id, user_id, points_awarded')
         .eq('week_id', weekId)
+        .eq('is_reversed', false)
         .in('user_id', [userId, opponentId]);
 
       if (scoreError) throw scoreError;
 
-      // 3. Aggregate points by task and user
       const userPointsMap = new Map<string, number>();
       const opponentPointsMap = new Map<string, number>();
 
@@ -74,9 +83,8 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
         }
       });
 
-      // 4. Build task progress list
       const taskProgress: TaskProgress[] = (taskInstances || []).map((task) => {
-        const config = task.league_task_configs as any;
+        const config = task.league_task_configs as unknown as LeagueTaskRelation;
         const maxPoints = config?.max_daily_points || 100;
         const icon = config?.task_templates?.icon || '📋';
         const userPoints = userPointsMap.get(task.id) || 0;
@@ -95,7 +103,6 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
         };
       });
 
-      // Sort by user's lead (tasks where user is winning first)
       taskProgress.sort((a, b) => {
         const aDiff = a.user_points - a.opponent_points;
         const bDiff = b.user_points - b.opponent_points;
@@ -105,15 +112,14 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
       return taskProgress;
     },
     enabled: !!seasonId && !!weekId && !!userId && !!opponentId,
-    staleTime: 30000,
+    staleTime: 10_000,
   });
 
-  // Real-time subscription for scoring events
   useEffect(() => {
     if (!weekId || !userId || !opponentId) return;
 
     const channel = supabase
-      .channel(`task-breakdown-${weekId}`)
+      .channel(`task-breakdown-${weekId}-${userId}-${opponentId}`)
       .on(
         'postgres_changes',
         {
@@ -123,8 +129,8 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
           filter: `week_id=eq.${weekId}`,
         },
         (payload) => {
-          const event = (payload.new || payload.old) as any;
-          if (event?.user_id === userId || event?.user_id === opponentId) {
+          const event = (payload.new || payload.old) as RealtimeScoringPayload;
+          if (event.user_id === userId || event.user_id === opponentId) {
             queryClient.invalidateQueries({ queryKey });
           }
         }
@@ -134,7 +140,7 @@ export function useTaskBreakdown({ seasonId, weekId, userId, opponentId }: UseTa
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [weekId, userId, opponentId, queryClient, queryKey]);
+  }, [weekId, userId, opponentId, queryClient]);
 
   return query;
 }

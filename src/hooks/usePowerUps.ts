@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -9,36 +10,30 @@ export interface PowerUp {
   modifier_value: number;
   is_used: boolean;
   used_at: string | null;
+  is_activated: boolean;
+  activated_at: string | null;
   week_id: string;
   task_instance_id: string | null;
 }
 
-// Power-up type definitions with metadata
 export const POWERUP_TYPES = {
   multiplier: {
-    name: '2x Multiplier',
-    description: 'Double points on your next task completion',
+    name: '2x Power Play',
+    description: 'Double your next positive scoring action',
     icon: '⚡',
     color: 'secondary',
     effect: 'pulse',
   },
-  boost: {
+  flat_boost: {
     name: 'Point Boost',
-    description: 'Add bonus points to any task',
+    description: 'Add bonus points to your next eligible action',
     icon: '🚀',
     color: 'primary',
     effect: 'glow',
   },
-  shield: {
-    name: 'Penalty Shield',
-    description: 'Block one missed task penalty',
-    icon: '🛡️',
-    color: 'accent',
-    effect: 'shimmer',
-  },
   forgiveness: {
     name: 'Forgiveness Pass',
-    description: 'Excuse one missed binary task',
+    description: 'Cover your next missed binary task',
     icon: '🎫',
     color: 'streak',
     effect: 'float',
@@ -47,10 +42,13 @@ export const POWERUP_TYPES = {
 
 export type PowerUpType = keyof typeof POWERUP_TYPES;
 
+type RealtimePowerUpPayload = {
+  user_id?: string;
+};
+
 export function usePowerUps(weekId?: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-
   const queryKey = ['powerups', weekId, user?.id];
 
   const query = useQuery({
@@ -63,65 +61,98 @@ export function usePowerUps(weekId?: string) {
         .select('*')
         .eq('week_id', weekId)
         .eq('user_id', user.id)
-        .eq('is_used', false);
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
-      return data || [];
+      return (data || []) as unknown as PowerUp[];
     },
     enabled: !!weekId && !!user,
+    staleTime: 10_000,
   });
 
-  const usePowerUp = useMutation({
-    mutationFn: async ({ 
-      powerupId, 
-      taskInstanceId 
-    }: { 
-      powerupId: string; 
+  useEffect(() => {
+    if (!weekId || !user?.id) return;
+
+    const channel = supabase
+      .channel(`powerups-${weekId}-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'powerups',
+          filter: `week_id=eq.${weekId}`,
+        },
+        (payload) => {
+          const changed = (payload.new || payload.old) as RealtimePowerUpPayload;
+          if (changed.user_id === user.id) {
+            queryClient.invalidateQueries({ queryKey });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [weekId, user?.id, queryClient]);
+
+  const activatePowerUp = useMutation({
+    mutationFn: async ({
+      powerup,
+      taskInstanceId,
+    }: {
+      powerup: PowerUp;
       taskInstanceId?: string;
     }) => {
-      const { data, error } = await supabase
-        .from('powerups')
-        .update({
-          is_used: true,
-          used_at: new Date().toISOString(),
-          task_instance_id: taskInstanceId || null,
-        })
-        .eq('id', powerupId)
-        .select()
-        .single();
+      const { error } = await supabase.rpc(
+        'activate_powerup' as never,
+        {
+          _powerup_id: powerup.id,
+          _task_instance_id: taskInstanceId ?? null,
+        } as never
+      );
 
       if (error) throw error;
-      return data;
+      return powerup;
     },
-    onSuccess: (data) => {
+    onSuccess: (powerup) => {
       queryClient.invalidateQueries({ queryKey });
-      const powerupMeta = POWERUP_TYPES[data.powerup_type as PowerUpType];
-      toast.success(`${powerupMeta?.name || 'Power-up'} activated!`, {
-        description: 'Effect will apply to your next eligible action',
+      const powerupMeta = POWERUP_TYPES[powerup.powerup_type as PowerUpType];
+      toast.success(`${powerupMeta?.name || 'Power Play'} armed`, {
+        description: powerupMeta?.description || 'It will trigger on your next eligible scoring action.',
       });
     },
-    onError: (error) => {
-      toast.error('Failed to activate power-up', {
+    onError: (error: Error) => {
+      toast.error('Could not arm Power Play', {
         description: error.message,
       });
     },
   });
 
-  // Group powerups by type for display
-  const groupedPowerups = (query.data || []).reduce((acc, powerup) => {
+  const powerups = query.data || [];
+  const availablePowerups = powerups.filter(powerup => !powerup.is_used && !powerup.is_activated);
+  const armedPowerups = powerups.filter(powerup => !powerup.is_used && powerup.is_activated);
+  const usedPowerups = powerups.filter(powerup => powerup.is_used);
+
+  const groupedPowerups = availablePowerups.reduce((acc, powerup) => {
     const type = powerup.powerup_type as PowerUpType;
-    if (!acc[type]) {
-      acc[type] = [];
-    }
+    if (!POWERUP_TYPES[type]) return acc;
+    if (!acc[type]) acc[type] = [];
     acc[type].push(powerup);
     return acc;
   }, {} as Record<PowerUpType, PowerUp[]>);
 
   return {
     ...query,
-    powerups: query.data || [],
+    powerups,
+    availablePowerups,
+    armedPowerups,
+    usedPowerups,
     groupedPowerups,
-    usePowerUp,
-    availableCount: query.data?.length || 0,
+    activatePowerUp,
+    availableCount: availablePowerups.length,
+    armedCount: armedPowerups.length,
+    usedCount: usedPowerups.length,
   };
 }
