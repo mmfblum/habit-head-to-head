@@ -92,7 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resendConfirmationEmail = async (email: string) => {
-    const redirectUrl = `${window.location.origin}/auth?verified=true`;
+    const currentParams = new URLSearchParams(window.location.search);
+    const joinCode = currentParams.get('join');
+    const redirect = new URL('/auth', window.location.origin);
+    redirect.searchParams.set('verified', 'true');
+    if (joinCode) redirect.searchParams.set('join', joinCode);
+    const redirectUrl = redirect.toString();
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
