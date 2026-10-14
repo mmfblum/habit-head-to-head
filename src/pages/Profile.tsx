@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Flame, Target, Calendar, Award, Settings, LogOut, User as UserIcon, Trash2, LogOutIcon, ListOrdered } from 'lucide-react';
+import { Trophy, Flame, Target, Calendar, Award, Settings, LogOut, User as UserIcon, Archive, LogOutIcon, ListOrdered, Layers } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
-import { useDeleteLeague, useLeaveLeague } from '@/hooks/useLeagueActions';
+import { useEndLeague, useLeaveLeague } from '@/hooks/useLeagueActions';
+import { useArchivedUserLeagues } from '@/hooks/useLeagues';
+import { useNavigate } from 'react-router-dom';
 import { TrophyCase } from '@/components/profile/TrophyCase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,8 +41,10 @@ const MASCOTS = [
 
 export default function Profile() {
   const { user, signOut } = useAuth();
-  const { data: league, isLoading: leagueLoading } = useUserPrimaryLeague();
-  const deleteLeague = useDeleteLeague();
+  const navigate = useNavigate();
+  const { data: league, isLoading: leagueLoading, memberships, selectLeague } = useUserPrimaryLeague();
+  const { data: archivedLeagues = [] } = useArchivedUserLeagues();
+  const endLeague = useEndLeague();
   const leaveLeague = useLeaveLeague();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [displayName, setDisplayName] = useState('');
@@ -166,15 +170,15 @@ export default function Profile() {
           },
           {
             icon: Target,
-            label: 'Week Raw Points',
+            label: 'Week Points',
             value: currentMember?.weekly_points?.toLocaleString() ?? '0',
             subtext: 'Current weekly race',
           },
           {
             icon: Award,
-            label: 'Championship Points',
-            value: currentMember?.championship_points?.toLocaleString() ?? '0',
-            subtext: `${currentMember?.total_points?.toLocaleString() ?? '0'} raw season pts`,
+            label: 'Season Points',
+            value: currentMember?.total_points?.toLocaleString() ?? '0',
+            subtext: 'All completed tasks',
           },
         ]
       : [
@@ -334,6 +338,69 @@ export default function Profile() {
           </motion.section>
         )}
 
+        <section className="card-elevated rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-primary" />
+              <p className="font-semibold text-sm">Your Leagues</p>
+            </div>
+            <span className="text-xs text-muted-foreground">{memberships.length}/3 active</span>
+          </div>
+
+          <div className="space-y-2">
+            {memberships.map((membership) => {
+              const item = membership.leagues;
+              if (!item) return null;
+              const selected = membership.league_id === league?.id;
+              const label = item.game_format === 'solo'
+                ? 'Solo'
+                : item.game_format === 'leaderboard'
+                  ? 'Leaderboard'
+                  : 'Head-to-Head';
+
+              return (
+                <button
+                  type="button"
+                  key={membership.league_id}
+                  onClick={() => {
+                    selectLeague(membership.league_id);
+                    navigate('/league');
+                  }}
+                  className={`w-full rounded-xl border p-3 text-left flex items-center justify-between gap-3 ${
+                    selected ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-muted/40'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{item.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{label}</p>
+                  </div>
+                  <span className="text-xs font-medium text-primary">{selected ? 'Current' : 'Open'}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <Button variant="outline" className="w-full" onClick={() => navigate('/league')}>
+            {memberships.length >= 3 ? 'Manage Active Leagues' : 'Switch, Create, or Join'}
+          </Button>
+
+          {archivedLeagues.length > 0 && (
+            <details className="pt-1">
+              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">
+                Ended leagues ({archivedLeagues.length})
+              </summary>
+              <div className="mt-2 space-y-1.5">
+                {archivedLeagues.map((membership) => (
+                  <div key={membership.league_id} className="rounded-lg bg-muted/40 px-3 py-2">
+                    <p className="text-xs font-medium">{membership.leagues?.name || 'Ended league'}</p>
+                    <p className="text-[10px] text-muted-foreground">History preserved</p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
+
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Calendar className="w-4 h-4 text-muted-foreground" />
@@ -392,9 +459,7 @@ export default function Profile() {
               <p className="font-semibold text-sm">{isSolo ? 'Solo Membership' : 'League Membership'}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isOwner
-                  ? isSolo
-                    ? 'You can delete this Solo season and its score history if you want to start over.'
-                    : 'As owner, you can delete the league if you want to end it for everyone.'
+                  ? 'End this league when you are finished. Scores and history will be preserved, and it will stop counting toward your active-league limit.'
                   : isLeaderboard
                     ? 'Leaving removes you from this leaderboard and future scoring weeks.'
                     : 'Leaving removes you from the league and future matchups.'}
@@ -405,25 +470,24 @@ export default function Profile() {
             {isOwner ? (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="w-full gap-2">
-                    <Trash2 className="w-4 h-4" />
-                    {isSolo ? 'Delete Solo' : 'Delete League'}
+                  <Button variant="outline" className="w-full gap-2">
+                    <Archive className="w-4 h-4" />
+                    End League
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {league.name}?</AlertDialogTitle>
+                    <AlertDialogTitle>End {league.name}?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This permanently deletes the league, its season, standings, scores, tasks, and check-in history. This cannot be undone.
+                      Scoring will stop and the league will move to your ended-league history. Scores, standings, tasks, and check-ins are preserved.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => deleteLeague.mutate(league.id)}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => endLeague.mutate(league.id)}
                     >
-                      {deleteLeague.isPending ? 'Deleting...' : isSolo ? 'Delete Solo' : 'Delete League'}
+                      {endLeague.isPending ? 'Ending...' : 'End League'}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
