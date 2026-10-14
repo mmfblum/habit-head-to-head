@@ -159,7 +159,7 @@ export default function League() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">{headerEyebrow}</p>
-              <LeagueSwitcher currentLeagueId={league.id} currentName={league.name} memberships={memberships} onSelect={selectLeague} onCreate={() => setShowCreateLeague(true)} />
+              <LeagueSwitcher currentLeagueId={league.id} currentName={league.name} memberships={memberships} onSelect={selectLeague} />
             </div>
             <div className="flex items-center gap-2">
               {league.invite_code && (
