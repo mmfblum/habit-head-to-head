@@ -244,6 +244,7 @@ export interface UserLeagueMembership {
     id: string;
     name: string;
     game_format?: LeagueGameFormat | null;
+    archived_at?: string | null;
   } | null;
 }
 
@@ -268,8 +269,9 @@ export function useUserPrimaryLeague() {
       if (!user) return [];
       const { data, error } = await supabase
         .from('league_members')
-        .select('league_id,joined_at,leagues(id,name,game_format)')
+        .select('league_id,joined_at,leagues!inner(id,name,game_format,archived_at)')
         .eq('user_id', user.id)
+        .is('leagues.archived_at', null)
         .order('joined_at', { ascending: false });
       if (error) throw error;
       return (data || []) as unknown as UserLeagueMembership[];
