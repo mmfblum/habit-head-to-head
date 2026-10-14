@@ -20,9 +20,10 @@ export function useUserLeagues() {
         .from('league_members')
         .select(`
           *,
-          leagues (*)
+          leagues!inner (*)
         `)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .is('leagues.archived_at', null);
 
       if (error) throw error;
       return data;
@@ -74,6 +75,8 @@ export function useCreateLeague() {
         queryClient.setQueryData(['selected-league', user.id], league.id);
       }
       await queryClient.invalidateQueries({ queryKey: ['user-leagues'], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ['user-league-memberships'] });
+      await queryClient.invalidateQueries({ queryKey: ['archived-user-leagues'] });
       await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
   });
@@ -211,5 +214,28 @@ export function useJoinLeague() {
       await queryClient.invalidateQueries({ queryKey: ['league-details'] });
       await queryClient.refetchQueries({ queryKey: ['user-leagues'] });
     },
+  });
+}
+
+
+export function useArchivedUserLeagues() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['archived-user-leagues', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('league_members')
+        .select('league_id,role,joined_at,leagues!inner(id,name,game_format,archived_at,created_by)')
+        .eq('user_id', user.id)
+        .not('leagues.archived_at', 'is', null)
+        .order('joined_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
   });
 }
