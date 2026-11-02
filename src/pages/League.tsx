@@ -5,10 +5,10 @@ import { LeaderboardRow } from '@/components/LeaderboardRow';
 import { useUserPrimaryLeague, type LeagueMemberWithProfile } from '@/hooks/useLeagueDetails';
 import { useWeekMatchups } from '@/hooks/useCurrentMatchup';
 import { useIsLeagueAdmin } from '@/hooks/useLeagueTaskConfigs';
-import { useStartSeason } from '@/hooks/useSeasonActions';
+import { useExtendSeason, useStartSeason } from '@/hooks/useSeasonActions';
 import { useAuth } from '@/hooks/useAuth';
 import { getCompetitionWeekPhase, formatWeekKickoff } from '@/lib/competition';
-import { Crown, ListOrdered, Trophy, Share2, Settings, Swords, Loader2, Zap, Play, Users, Clock } from 'lucide-react';
+import { Crown, ListOrdered, Trophy, Share2, Settings, Swords, Loader2, Zap, Play, Users, Clock, CalendarPlus } from 'lucide-react';
 import { CreateLeagueWizard } from '@/components/league/CreateLeagueWizard';
 import { LeagueSwitcher } from '@/components/league/LeagueSwitcher';
 import { toast } from 'sonner';
@@ -32,6 +32,9 @@ export default function League() {
   const [showInitialSetup, setShowInitialSetup] = useState(false);
   const [showCreateLeague, setShowCreateLeague] = useState(false);
   const startSeason = useStartSeason();
+  const extendSeason = useExtendSeason();
+  const [extendWeeks, setExtendWeeks] = useState(1);
+  const [showExtend, setShowExtend] = useState(false);
 
   const currentSeasonId = league?.current_season?.id;
   const { data: taskConfigs } = useLeagueTaskConfigs(currentSeasonId);
@@ -189,6 +192,67 @@ export default function League() {
       </header>
 
       <main className="px-4 py-4 space-y-6">
+        {isAdmin && isActive && currentSeason && (
+          <section className="card-elevated rounded-xl p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CalendarPlus className="w-4 h-4 text-primary" />
+                  <h3 className="font-semibold text-sm">Season length</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {currentSeason.weeks_count} weeks · ends {format(parseISO(currentSeason.end_date), 'MMM d')}
+                </p>
+              </div>
+              {!showExtend && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowExtend(true)}>
+                  Extend League
+                </Button>
+              )}
+            </div>
+
+            {showExtend && (
+              <div className="mt-4 rounded-xl bg-muted/40 p-3">
+                <p className="text-sm font-medium">Add more weeks</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Existing scores stay exactly as they are. New weeks continue the same league.
+                </p>
+                <div className="grid grid-cols-4 gap-2 mt-3">
+                  {[1, 2, 3, 4].map((weeks) => (
+                    <button
+                      key={weeks}
+                      type="button"
+                      onClick={() => setExtendWeeks(weeks)}
+                      className={`rounded-lg border px-2 py-2 text-sm font-semibold ${
+                        extendWeeks === weeks ? 'border-primary bg-primary/10 text-primary' : 'border-border'
+                      }`}
+                    >
+                      +{weeks}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      await extendSeason.mutateAsync({ seasonId: currentSeason.id, additionalWeeks: extendWeeks });
+                      setShowExtend(false);
+                      setExtendWeeks(1);
+                    }}
+                    disabled={extendSeason.isPending}
+                    className="flex-1"
+                  >
+                    {extendSeason.isPending ? 'Extending...' : `Add ${extendWeeks} Week${extendWeeks === 1 ? '' : 's'}`}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setShowExtend(false)} disabled={extendSeason.isPending}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
         {isSolo && <AccountabilityShareCard leagueId={league.id} />}
         {isSolo && isActive && currentSeason && currentWeek && user?.id && (
           <SoloStatsDashboard
