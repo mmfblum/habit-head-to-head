@@ -22,6 +22,18 @@ import { AccountabilityShareCard } from '@/components/solo/AccountabilityShareCa
 import { SoloStatsDashboard } from '@/components/solo/SoloStatsDashboard';
 import { PunishmentSettingsCard } from '@/components/league/PunishmentSettingsCard';
 import { LeaderboardConsequenceCard } from '@/components/leaderboard/LeaderboardConsequenceCard';
+import { useEndLeague } from '@/hooks/useLeagueActions';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function League() {
   const navigate = useNavigate();
@@ -33,6 +45,7 @@ export default function League() {
   const [showCreateLeague, setShowCreateLeague] = useState(false);
   const startSeason = useStartSeason();
   const extendSeason = useExtendSeason();
+  const endLeague = useEndLeague();
   const [extendWeeks, setExtendWeeks] = useState(1);
   const [showExtend, setShowExtend] = useState(false);
 
@@ -204,11 +217,37 @@ export default function League() {
                   {currentSeason.weeks_count} weeks · ends {format(parseISO(currentSeason.end_date), 'MMM d')}
                 </p>
               </div>
-              {!showExtend && (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowExtend(true)}>
-                  Extend League
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {!showExtend && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setShowExtend(true)}>
+                    Extend League
+                  </Button>
+                )}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                      End League
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>End {league.name}?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Scoring will stop immediately. Scores, standings, tasks, and check-in history will be preserved, and this league will no longer count toward your active-league limit.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep Playing</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => endLeague.mutate(league.id)}
+                        disabled={endLeague.isPending}
+                      >
+                        {endLeague.isPending ? 'Ending...' : 'End League'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
 
             {showExtend && (
