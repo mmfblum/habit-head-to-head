@@ -49,7 +49,7 @@ export function CreateLeagueWizard({ onClose }: { onClose: () => void }) {
   const [formData, setFormData] = useState<LeagueFormData>({
     name: '',
     description: '',
-    weeksCount: 8,
+    weeksCount: 3,
     gameFormat: 'head_to_head',
   });
   const [taskConfigs, setTaskConfigs] = useState<Map<string, TaskConfigOverrides>>(new Map());
