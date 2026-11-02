@@ -49,3 +49,41 @@ export function useStartSeason() {
     },
   });
 }
+
+
+export function useExtendSeason() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ seasonId, additionalWeeks }: { seasonId: string; additionalWeeks: number }) => {
+      const { error } = await supabase.rpc(
+        'extend_league_season' as never,
+        {
+          _season_id: seasonId,
+          _additional_weeks: additionalWeeks,
+        } as never
+      );
+
+      if (error) throw error;
+      return { additionalWeeks };
+    },
+    onSuccess: ({ additionalWeeks }) => {
+      toast({
+        title: 'League extended',
+        description: `Added ${additionalWeeks} more week${additionalWeeks === 1 ? '' : 's'}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['league-details'] });
+      queryClient.invalidateQueries({ queryKey: ['week-matchups'] });
+      queryClient.invalidateQueries({ queryKey: ['current-matchup'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks-with-checkins'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Could not extend league',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
