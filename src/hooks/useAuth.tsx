@@ -23,19 +23,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    let mounted = true;
+    let settled = false;
+
+    const finishLoading = () => {
+      if (!mounted || settled) return;
+      settled = true;
       setLoading(false);
-    });
+    };
+
+    const watchdog = window.setTimeout(() => {
+      console.warn('Auth initialization timed out; showing the app instead of blocking on Loading.');
+      finishLoading();
+    }, 8000);
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!mounted) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+        finishLoading();
+      })
+      .catch((error) => {
+        console.error('Failed to initialize auth session', error);
+        finishLoading();
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
+      finishLoading();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      window.clearTimeout(watchdog);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string, displayName: string) => {
