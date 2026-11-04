@@ -66,8 +66,8 @@ select is(
     order by se.created_at desc
     limit 1
   ),
-  3::numeric,
-  'Imported Android Screen Time scores without requiring a manual confirmation tap'
+  1::numeric,
+  'Imported Android Screen Time follows the one-point browser MVP scoring contract'
 );
 
 set local role authenticated;
@@ -95,8 +95,8 @@ select is(
     order by se.created_at desc
     limit 1
   ),
-  0::numeric,
-  'Manual exact Screen Time still requires explicit confirmation'
+  1::numeric,
+  'Manual Screen Time meeting the goal earns the same one-point MVP score'
 );
 
 select * from finish();
