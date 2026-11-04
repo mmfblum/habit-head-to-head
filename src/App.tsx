@@ -49,11 +49,13 @@ function AuthRoute() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const isEmailConfirmationReturn = searchParams.get('verified') === 'true';
+  const isPasswordRecoveryReturn = searchParams.get('mode') === 'reset';
+  const isAuthErrorReturn = searchParams.has('error') || searchParams.has('error_description');
 
   // Let the confirmation page render even when Supabase has already created a
   // session. Otherwise authenticated users are redirected before they ever see
   // the success state.
-  if (isEmailConfirmationReturn) return <Auth />;
+  if (isEmailConfirmationReturn || isPasswordRecoveryReturn || isAuthErrorReturn) return <Auth />;
   if (!user) return <Auth />;
   const joinCode = searchParams.get('join');
   return <Navigate to={joinCode ? `/?join=${encodeURIComponent(joinCode)}` : '/'} replace />;
