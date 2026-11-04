@@ -8,11 +8,17 @@ import type { Tables } from '@/integrations/supabase/types';
 type TaskInstance = Tables<'task_instances'>;
 type TaskTemplate = Tables<'task_templates'>;
 type DailyCheckin = Tables<'daily_checkins'>;
+type ScoringEvent = Tables<'scoring_events'>;
 
 interface TaskInstanceWithRelations extends TaskInstance {
   league_task_config?: {
     task_template: TaskTemplate;
   } | null;
+}
+
+export interface SubmitCheckinResult {
+  checkin: DailyCheckin;
+  scoringEvent: Pick<ScoringEvent, 'points_awarded' | 'points_before_cap' | 'powerup_applied' | 'rule_applied'> | null;
 }
 
 export function useTasksWithCheckins(seasonId: string | undefined, date?: Date) {
@@ -24,7 +30,6 @@ export function useTasksWithCheckins(seasonId: string | undefined, date?: Date) 
     queryFn: async (): Promise<TaskWithTemplate[]> => {
       if (!seasonId || !user?.id) return [];
 
-      // Fetch task instances for this season with their template info
       const { data: taskInstances, error: taskError } = await supabase
         .from('task_instances')
         .select(`
@@ -37,21 +42,25 @@ export function useTasksWithCheckins(seasonId: string | undefined, date?: Date) 
 
       if (taskError) throw taskError;
 
-      // Fetch today's check-ins for current user
-      const { data: checkins, error: checkinError } = await supabase
-        .from('daily_checkins')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('checkin_date', checkinDate)
-        .in('task_instance_id', taskInstances?.map(t => t.id) || []);
+      const instanceIds = taskInstances?.map((task) => task.id) || [];
+      let checkins: DailyCheckin[] = [];
 
-      if (checkinError) throw checkinError;
+      if (instanceIds.length > 0) {
+        const { data, error: checkinError } = await supabase
+          .from('daily_checkins')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('checkin_date', checkinDate)
+          .in('task_instance_id', instanceIds);
 
-      // Combine task instances with their check-ins and templates
-      return (taskInstances as TaskInstanceWithRelations[] || []).map(task => ({
+        if (checkinError) throw checkinError;
+        checkins = data || [];
+      }
+
+      return (taskInstances as TaskInstanceWithRelations[] || []).map((task) => ({
         ...task,
         template: task.league_task_config?.task_template,
-        todayCheckin: checkins?.find(c => c.task_instance_id === task.id),
+        todayCheckin: checkins.find((checkin) => checkin.task_instance_id === task.id),
       }));
     },
     enabled: !!seasonId && !!user?.id,
@@ -71,13 +80,10 @@ export function useSubmitCheckin() {
       taskInstanceId: string;
       value: CheckinValue;
       date?: Date;
-    }) => {
+    }): Promise<SubmitCheckinResult> => {
       if (!user?.id) throw new Error('Must be logged in');
 
       const checkinDate = format(date ?? new Date(), 'yyyy-MM-dd');
-
-      // Check if there's an existing check-in for this task/date
-      // Use .maybeSingle() to avoid 406 error when no rows exist
       const { data: existing } = await supabase
         .from('daily_checkins')
         .select('id')
@@ -86,54 +92,59 @@ export function useSubmitCheckin() {
         .eq('checkin_date', checkinDate)
         .maybeSingle();
 
-      // Build update/insert data, explicitly handling each field to avoid null string issues
-      const baseData: Record<string, unknown> = {
-        updated_at: new Date().toISOString(),
-      };
+      const baseData: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (value.boolean_value !== undefined) baseData.boolean_value = value.boolean_value;
+      if (value.numeric_value !== undefined) baseData.numeric_value = value.numeric_value;
+      if (value.time_value !== undefined && value.time_value !== '') baseData.time_value = value.time_value;
+      if (value.duration_minutes !== undefined) baseData.duration_minutes = value.duration_minutes;
+      if (value.metadata !== undefined) baseData.metadata = value.metadata;
 
-      // Only include fields that have actual values (not undefined)
-      if (value.boolean_value !== undefined) {
-        baseData.boolean_value = value.boolean_value;
-      }
-      if (value.numeric_value !== undefined) {
-        baseData.numeric_value = value.numeric_value;
-      }
-      if (value.time_value !== undefined && value.time_value !== '') {
-        baseData.time_value = value.time_value;
-      }
-      if (value.duration_minutes !== undefined) {
-        baseData.duration_minutes = value.duration_minutes;
-      }
-      if (value.metadata !== undefined) {
-        baseData.metadata = value.metadata;
-      }
+      let savedCheckin: DailyCheckin;
 
       if (existing) {
-        // Update existing check-in
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('daily_checkins')
           .update(baseData)
-          .eq('id', existing.id);
-
+          .eq('id', existing.id)
+          .select('*')
+          .single();
         if (error) throw error;
+        savedCheckin = data;
       } else {
-        // Create new check-in
-        const insertData: Record<string, unknown> = {
-          task_instance_id: taskInstanceId,
-          user_id: user.id,
-          checkin_date: checkinDate,
-          ...baseData,
-        };
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('daily_checkins')
-          .insert(insertData as never);
-
+          .insert({
+            task_instance_id: taskInstanceId,
+            user_id: user.id,
+            checkin_date: checkinDate,
+            ...baseData,
+          } as never)
+          .select('*')
+          .single();
         if (error) throw error;
+        savedCheckin = data;
       }
+
+      // The scoring trigger runs synchronously with the write, so the resulting
+      // audit event is available before the mutation returns. Failure to read
+      // the celebration metadata must never turn a successful check-in into an error.
+      const { data: scoringEvent } = await supabase
+        .from('scoring_events')
+        .select('points_awarded, points_before_cap, powerup_applied, rule_applied')
+        .eq('daily_checkin_id', savedCheckin.id)
+        .eq('is_reversed', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      return { checkin: savedCheckin, scoringEvent };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks-with-checkins'] });
       queryClient.invalidateQueries({ queryKey: ['weekly-scores'] });
+      queryClient.invalidateQueries({ queryKey: ['current-matchup'] });
+      queryClient.invalidateQueries({ queryKey: ['matchup-activity'] });
+      queryClient.invalidateQueries({ queryKey: ['task-breakdown'] });
     },
   });
 }

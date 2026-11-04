@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Activity, Brain, Moon, BookOpen, Dumbbell, Heart, Users, Sparkles, X } from 'lucide-react';
-import { TaskTemplate } from '@/hooks/useTaskTemplates';
+import { Activity, Brain, Moon, BookOpen, Dumbbell, Heart, Users, Sparkles, X, Plus, Check } from 'lucide-react';
+import type { TaskTemplate } from '@/hooks/useTaskTemplates';
 import { Button } from '@/components/ui/button';
-import { TaskConfigurationPanel, TaskConfigOverrides } from './TaskConfigurationPanel';
-import { getConfiguredTaskName } from '@/lib/taskNaming';
+import { TaskConfigurationPanel, type TaskConfigOverrides } from './TaskConfigurationPanel';
+import { getConfiguredTaskName, getTaskScoringSentence } from '@/lib/taskNaming';
 
 interface TaskSelectionGridProps {
   groupedTemplates: Record<string, TaskTemplate[]>;
@@ -13,6 +13,7 @@ interface TaskSelectionGridProps {
   onUpdateConfig: (taskId: string, config: TaskConfigOverrides) => void;
   onClearAll?: () => void;
   minRequired?: number;
+  simpleScoring?: boolean;
 }
 
 const categoryIcons: Record<string, React.ElementType> = {
@@ -46,34 +47,24 @@ export function TaskSelectionGrid({
   onUpdateConfig,
   onClearAll,
   minRequired = 0,
+  simpleScoring = false,
 }: TaskSelectionGridProps) {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const categories = Object.keys(groupedTemplates);
   const needsMore = minRequired > 0 && selectedTasks.size < minRequired;
 
-  const handleTaskClick = (taskId: string, template: TaskTemplate) => {
-    const wasSelected = selectedTasks.has(taskId);
-    onToggleTask(taskId, template);
-    
-    // Auto-expand if newly selected
-    if (!wasSelected) {
-      setExpandedTask(taskId);
-    } else {
-      // If deselecting the currently expanded task, collapse it
-      if (expandedTask === taskId) {
-        setExpandedTask(null);
-      }
-    }
-  };
-
   return (
     <div className="space-y-6">
-      {/* Clear All Button */}
-      {selectedTasks.size > 0 && onClearAll && (
-        <div className="flex justify-end">
-          <Button 
-            variant="ghost" 
-            size="sm" 
+      <div className="sticky top-[124px] z-10 rounded-xl border border-border bg-background/95 backdrop-blur px-3 py-2 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold">{selectedTasks.size} task{selectedTasks.size === 1 ? '' : 's'} selected</p>
+          <p className="text-[11px] text-muted-foreground">{needsMore ? `Choose at least ${minRequired}` : 'Ready to continue'}</p>
+        </div>
+        {selectedTasks.size > 0 && onClearAll && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => {
               onClearAll();
               setExpandedTask(null);
@@ -81,10 +72,10 @@ export function TaskSelectionGrid({
             className="text-muted-foreground hover:text-destructive"
           >
             <X className="w-4 h-4 mr-1" />
-            Clear All
+            Clear
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {categories.map((category) => {
         const Icon = categoryIcons[category] || Activity;
@@ -95,7 +86,6 @@ export function TaskSelectionGrid({
             <div className="flex items-center gap-2 mb-3">
               <Icon className={`w-4 h-4 ${categoryColors[category]?.split(' ')[1] || 'text-muted-foreground'}`} />
               <h4 className="font-medium capitalize">{category}</h4>
-              <span className="text-xs text-muted-foreground">({tasks.length})</span>
             </div>
 
             <div className="grid grid-cols-1 gap-3">
@@ -103,61 +93,65 @@ export function TaskSelectionGrid({
                 const isSelected = selectedTasks.has(task.id);
                 const config = selectedTasks.get(task.id);
                 const isExpanded = expandedTask === task.id;
-
-                // Get display name based on config
-                const displayName = isSelected && config 
-                  ? getConfiguredTaskName(task, config) 
-                  : task.name;
+                const defaultConfig = (task.default_config || {}) as unknown as TaskConfigOverrides;
+                const displayName = getConfiguredTaskName(task, isSelected && config ? config : defaultConfig);
 
                 return (
                   <motion.div
                     key={task.id}
                     className={`relative p-4 rounded-xl border-2 transition-all ${
-                      isSelected
-                        ? 'border-primary bg-primary/10'
-                        : needsMore 
-                          ? 'border-border bg-card hover:border-primary/50 animate-pulse-subtle'
-                          : 'border-border bg-card hover:border-muted-foreground/30'
+                      isSelected ? 'border-primary bg-primary/10' : 'border-border bg-card'
                     }`}
                     layout
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleTaskClick(task.id, task)}
-                      className="w-full text-left"
-                    >
-                      {isSelected && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center"
-                        >
-                          <Check className="w-3 h-3 text-primary-foreground" />
-                        </motion.div>
-                      )}
-
-                      <div className="flex items-start gap-3">
-                        <div className={`p-2 rounded-lg ${categoryColors[category] || 'bg-muted'}`}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate pr-6">{displayName}</p>
-                          {task.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                              {task.description}
-                            </p>
-                          )}
-                        </div>
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-lg ${categoryColors[category] || 'bg-muted'}`}>
+                        <Icon className="w-4 h-4" />
                       </div>
-                    </button>
 
-                    {isSelected && config && (
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">{displayName}</p>
+                        {task.description && !isSelected && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{task.description}</p>
+                        )}
+                        {isSelected && config && (
+                          <p className="text-xs text-primary/90 mt-1">{getTaskScoringSentence(task, config)}</p>
+                        )}
+                      </div>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isSelected ? 'secondary' : 'default'}
+                        onClick={() => {
+                          onToggleTask(task.id, task);
+                          if (isSelected && expandedTask === task.id) setExpandedTask(null);
+                        }}
+                        className="shrink-0"
+                        aria-label={isSelected ? `Remove ${displayName}` : `Add ${displayName}`}
+                      >
+                        {isSelected ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 mr-1" />
+                            Added
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5 mr-1" />
+                            Add
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {isSelected && config && task.input_type !== 'binary' && (
                       <TaskConfigurationPanel
                         template={task}
                         config={config}
                         onChange={(newConfig) => onUpdateConfig(task.id, newConfig)}
                         isExpanded={isExpanded}
                         onToggleExpand={() => setExpandedTask(isExpanded ? null : task.id)}
+                        simpleScoring={simpleScoring}
                       />
                     )}
                   </motion.div>

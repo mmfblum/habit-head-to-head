@@ -139,7 +139,11 @@ export default function CheckinDemo() {
     return initial;
   });
 
-  const updateTaskState = (taskId: string, key: keyof DemoTaskState, value: any) => {
+  const updateTaskState = <K extends keyof DemoTaskState>(
+    taskId: string,
+    key: K,
+    value: DemoTaskState[K]
+  ) => {
     setTaskStates(prev => ({
       ...prev,
       [taskId]: { ...prev[taskId], [key]: value },

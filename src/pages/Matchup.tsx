@@ -1,229 +1,163 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MessageCircle, TrendingUp, Activity, ListChecks } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { MessageCircle, TrendingUp, Activity, ListChecks, Clock, Zap, History } from 'lucide-react';
+import { toast } from 'sonner';
 import { MatchupScoreboard } from '@/components/matchup/MatchupScoreboard';
 import { ActivityFeed } from '@/components/matchup/ActivityFeed';
 import { TaskBreakdown } from '@/components/matchup/TaskBreakdown';
-import { PowerUpButton } from '@/components/matchup/PowerUpSelector';
+import { PunishmentWheelCard } from '@/components/matchup/PunishmentWheelCard';
 import { useMatchupActivity, useMatchupScores } from '@/hooks/useMatchupActivity';
 import { useTaskBreakdown } from '@/hooks/useTaskBreakdown';
 import { useUserPrimaryLeague } from '@/hooks/useLeagueDetails';
 import { useDailyMatchupNotifications } from '@/hooks/useNotifications';
+import { useCurrentMatchup } from '@/hooks/useCurrentMatchup';
+import { useRivalryStats } from '@/hooks/useRivalryStats';
 import { useAuth } from '@/hooks/useAuth';
+import { formatWeekKickoff } from '@/lib/competition';
+import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+const QUICK_TAUNTS = [
+  'Enjoy the lead while it lasts 👀',
+  'Clock’s running. I’m coming for you.',
+  'Hope you saved something for the fourth quarter.',
+  'See you at the finish line. 🏁',
+];
 
 export default function Matchup() {
+  const navigate = useNavigate();
   const { user: authUser } = useAuth();
+  const queryClient = useQueryClient();
   const { data: leagueDetails, isLoading: leagueLoading } = useUserPrimaryLeague();
+  const [tauntOpen, setTauntOpen] = useState(false);
+  const [customTaunt, setCustomTaunt] = useState('');
 
-  // Get current week and members
   const currentWeek = leagueDetails?.current_week;
   const members = leagueDetails?.members || [];
-  
-  // For now, pick the first other member as opponent (can be enhanced with matchups table later)
-  const currentMember = members.find(m => m.user_id === authUser?.id);
-  const opponent = members.find(m => m.user_id !== authUser?.id);
-
+  const currentMember = members.find((member) => member.user_id === authUser?.id);
+  const { data: scheduledMatchup, isLoading: matchupLoading } = useCurrentMatchup(currentWeek?.id);
+  const opponentId = scheduledMatchup
+    ? scheduledMatchup.user1_id === authUser?.id ? scheduledMatchup.user2_id : scheduledMatchup.user1_id
+    : undefined;
+  const opponent = members.find((member) => member.user_id === opponentId);
+  const { data: rivalry } = useRivalryStats(currentMember?.user_id, opponent?.user_id);
   const userIds = [currentMember?.user_id, opponent?.user_id].filter(Boolean) as string[];
+  const isLiveGame = scheduledMatchup?.status === 'in_progress';
+  const isFinal = scheduledMatchup?.status === 'completed';
+  const isScheduled = scheduledMatchup?.status === 'scheduled';
+  const canShowGameData = isLiveGame || isFinal;
 
-  // Real-time scores
-  const { data: scoresMap, isLoading: scoresLoading } = useMatchupScores(
-    currentWeek?.id,
-    userIds
-  );
-
-  // Real-time activity feed
+  const { data: scoresMap, isLoading: scoresLoading } = useMatchupScores(currentWeek?.id, userIds);
   const { data: activityEvents, isLoading: activityLoading, setIsAtTop } = useMatchupActivity({
-    weekId: currentWeek?.id,
+    weekId: canShowGameData ? currentWeek?.id : undefined,
     userIds,
-    enabled: !!currentWeek?.id && userIds.length === 2,
+    enabled: canShowGameData && !!currentWeek?.id && userIds.length === 2,
   });
-
-  // Task breakdown comparison
   const { data: taskBreakdown, isLoading: tasksLoading } = useTaskBreakdown({
-    seasonId: leagueDetails?.current_season?.id,
-    weekId: currentWeek?.id,
+    seasonId: canShowGameData ? leagueDetails?.current_season?.id : undefined,
+    weekId: canShowGameData ? currentWeek?.id : undefined,
     userId: currentMember?.user_id,
     opponentId: opponent?.user_id,
   });
 
-  // Build participant data
   const userScore = scoresMap?.get(currentMember?.user_id || '') || 0;
   const opponentScore = scoresMap?.get(opponent?.user_id || '') || 0;
+  const scoreDiffSigned = userScore - opponentScore;
+  const scoreDiff = Math.abs(scoreDiffSigned);
+  const isWinning = scoreDiffSigned > 0;
+  const isTied = scoreDiffSigned === 0;
 
-  const userParticipant = {
-    id: currentMember?.user_id || '',
-    display_name: currentMember?.display_name || 'You',
-    avatar_url: currentMember?.avatar_url || null,
-    score: userScore,
-  };
+  const userParticipant = { id: currentMember?.user_id || '', display_name: currentMember?.display_name || 'You', avatar_url: currentMember?.avatar_url || null, score: userScore };
+  const opponentParticipant = { id: opponent?.user_id || '', display_name: opponent?.display_name || 'Opponent', avatar_url: opponent?.avatar_url || null, score: opponentScore };
 
-  const opponentParticipant = {
-    id: opponent?.user_id || '',
-    display_name: opponent?.display_name || 'Opponent',
-    avatar_url: opponent?.avatar_url || null,
-    score: opponentScore,
-  };
+  const swingTasks = [...(taskBreakdown || [])]
+    .sort((a, b) => (b.opponent_points - b.user_points) - (a.opponent_points - a.user_points) || b.max_points - a.max_points)
+    .slice(0, 2)
+    .map((task) => task.task_name);
 
-  const isLoading = leagueLoading || scoresLoading;
-  const isWinning = userScore > opponentScore;
-  const scoreDiff = Math.abs(userScore - opponentScore);
-
-  // Always call hooks before conditional returns (React rules of hooks)
   useDailyMatchupNotifications({
-    leagueId: leagueDetails?.id,
+    leagueId: isLiveGame ? leagueDetails?.id : undefined,
     opponentName: opponent?.display_name ?? 'Opponent',
-    scoreLine: null,
-    swingTasks: ['Steps', 'Workout'],
+    scoreLine: `${userScore}-${opponentScore} ${isWinning ? 'you lead' : isTied ? 'tied' : 'you trail'}.`,
+    swingTasks,
   });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background pb-24">
-        <div className="p-4 space-y-4">
-          <Skeleton className="h-48 w-full rounded-xl" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-64 w-full rounded-xl" />
-        </div>
-      </div>
-    );
+  const sendTaunt = useMutation({
+    mutationFn: async (body: string) => {
+      if (!scheduledMatchup?.id || !isLiveGame) throw new Error('Taunts open when the matchup goes live');
+      const { error } = await supabase.rpc('send_matchup_taunt' as never, { _matchup_id: scheduledMatchup.id, _body: body } as never);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setTauntOpen(false);
+      setCustomTaunt('');
+      toast.success('Taunt sent');
+      queryClient.invalidateQueries({ queryKey: ['league-events', leagueDetails?.id] });
+    },
+    onError: (error: Error) => toast.error(error.message || 'Could not send taunt'),
+  });
+
+  const isLoading = leagueLoading || matchupLoading || scoresLoading;
+  if (isLoading) return <div className="min-h-screen bg-background pb-24"><div className="p-4 space-y-4"><Skeleton className="h-48 w-full rounded-xl" /><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full rounded-xl" /></div></div>;
+
+  if (!currentWeek || !scheduledMatchup || !opponent || !currentMember) {
+    const hasEnoughMembers = members.length > 1;
+    return <div className="min-h-screen bg-background pb-24 flex items-center justify-center"><div className="text-center p-8 max-w-sm"><div className="text-5xl mb-4">{hasEnoughMembers ? '🏟️' : '👥'}</div><h2 className="text-xl font-bold mb-2">{hasEnoughMembers ? 'No Matchup This Week' : 'Invite an Opponent'}</h2><p className="text-muted-foreground text-sm">{hasEnoughMembers ? 'You have a bye this week. Keep scoring for season points and get ready for your next opponent.' : 'Head-to-head competition starts once another player joins your league.'}</p></div></div>;
   }
 
-  if (!currentWeek || !opponent) {
-    return (
-      <div className="min-h-screen bg-background pb-24 flex items-center justify-center">
-        <div className="text-center p-8">
-          <div className="text-5xl mb-4">🏟️</div>
-          <h2 className="text-xl font-bold mb-2">No Active Matchup</h2>
-          <p className="text-muted-foreground text-sm">
-            Wait for the season to start or for matchups to be generated.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const battleHeadline = isScheduled
+    ? `Kickoff ${formatWeekKickoff(currentWeek.start_date)}`
+    : isFinal ? isTied ? 'Final: tie game' : isWinning ? 'WIN SECURED' : 'FINAL WHISTLE'
+    : isTied ? 'Dead even' : isWinning ? 'Protect the lead' : 'Time to make a run';
+  const battleSubtext = isScheduled
+    ? `Your Week ${currentWeek.week_number} opponent is set. Check-ins and Power Play unlock at kickoff.`
+    : isFinal ? isTied ? `You both finished on ${userScore} points.` : `${userScore}-${opponentScore}. ${scoreDiff} point ${isWinning ? 'win' : 'loss'}.`
+    : isTied ? `${userScore}-${opponentScore}. One task can swing it.` : `${scoreDiff} point${scoreDiff !== 1 ? 's' : ''} ${isWinning ? 'ahead' : 'behind'}.`;
+
+  const rivalryHeadline = !rivalry || rivalry.games === 0
+    ? 'First meeting'
+    : rivalry.wins === rivalry.losses
+      ? `Series tied ${rivalry.wins}-${rivalry.losses}${rivalry.ties ? `-${rivalry.ties}` : ''}`
+      : rivalry.wins > rivalry.losses
+        ? `You lead the series ${rivalry.wins}-${rivalry.losses}${rivalry.ties ? `-${rivalry.ties}` : ''}`
+        : `${opponentParticipant.display_name} leads ${rivalry.losses}-${rivalry.wins}${rivalry.ties ? `-${rivalry.ties}` : ''}`;
+  const averageMargin = rivalry && rivalry.games > 0
+    ? Math.abs(rivalry.pointsFor - rivalry.pointsAgainst) / rivalry.games
+    : 0;
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Scoreboard Header */}
-      <MatchupScoreboard
-        user={userParticipant}
-        opponent={opponentParticipant}
-        weekNumber={currentWeek.week_number}
-        weekEndDate={currentWeek.end_date}
-        isLive={!currentWeek.is_locked}
-      />
+      <MatchupScoreboard user={userParticipant} opponent={opponentParticipant} weekNumber={currentWeek.week_number} weekStartDate={currentWeek.start_date} weekEndDate={currentWeek.end_date} status={scheduledMatchup.status} />
+      <main className="px-4 py-4 space-y-5">
+        <section className="card-elevated rounded-xl p-4"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${isScheduled ? 'bg-secondary/20' : isFinal ? 'bg-muted' : isWinning ? 'bg-primary/20' : isTied ? 'bg-secondary/20' : 'bg-loss/20'}`}>{isScheduled ? <Clock className="w-5 h-5 text-secondary" /> : isFinal ? (isWinning ? '🏆' : isTied ? '🤝' : '🏁') : isWinning ? '🛡️' : isTied ? '⚖️' : '⚔️'}</div><div><p className="font-semibold text-sm">{battleHeadline}</p><p className="text-xs text-muted-foreground">{battleSubtext}</p></div></div>{isLiveGame && <div className="flex items-center gap-1"><TrendingUp className={`w-4 h-4 ${isWinning ? 'text-primary' : 'text-muted-foreground'}`} /><span className="text-xs text-muted-foreground">vs {opponentParticipant.display_name}</span></div>}</div></section>
 
-      <main className="px-4 py-4 space-y-6">
-        {/* Tabbed content: Activity & Tasks */}
-        <Tabs defaultValue="activity" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-3">
-            <TabsTrigger value="activity" className="flex items-center gap-1.5">
-              <Activity className="w-4 h-4" />
-              <span>Live Activity</span>
-              {activityEvents && activityEvents.length > 0 && (
-                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full ml-1">
-                  {activityEvents.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="tasks" className="flex items-center gap-1.5">
-              <ListChecks className="w-4 h-4" />
-              <span>Task Breakdown</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="activity" className="mt-0">
-            <div className="card-elevated rounded-xl p-3">
-              <ActivityFeed
-                events={activityEvents || []}
-                currentUserId={authUser?.id}
-                onScrollPositionChange={setIsAtTop}
-                isLoading={activityLoading}
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="tasks" className="mt-0">
-            <TaskBreakdown
-              tasks={taskBreakdown || []}
-              opponentName={opponentParticipant.display_name}
-              isLoading={tasksLoading}
-            />
-          </TabsContent>
-        </Tabs>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
-          <PowerUpButton weekId={currentWeek.id} />
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            className="p-4 rounded-xl bg-muted flex items-center justify-center gap-2"
-          >
-            <MessageCircle className="w-5 h-5 text-muted-foreground" />
-            <span className="font-semibold text-sm text-muted-foreground">Send Taunt</span>
-          </motion.button>
-        </div>
-
-        {/* Head-to-head summary */}
-        <section className="card-elevated rounded-xl p-4">
-          <h3 className="font-semibold text-sm mb-3">This Week's Battle</h3>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`
-                w-10 h-10 rounded-lg flex items-center justify-center text-lg
-                ${isWinning ? 'bg-primary/20' : 'bg-loss/20'}
-              `}>
-                {isWinning ? '🏆' : '⚔️'}
-              </div>
-              <div>
-                <p className="font-medium text-sm">
-                  {isWinning ? 'You\'re ahead!' : scoreDiff === 0 ? 'It\'s tied!' : 'Catch up!'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {scoreDiff} point{scoreDiff !== 1 ? 's' : ''} {isWinning ? 'lead' : scoreDiff === 0 ? '' : 'behind'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <TrendingUp className={`w-4 h-4 ${isWinning ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className="text-xs text-muted-foreground">
-                vs {opponentParticipant.display_name}
-              </span>
-            </div>
-          </div>
-          
-          {/* Score progress bar */}
-          <div className="mt-4">
-            <div className="h-2 bg-muted rounded-full overflow-hidden flex">
-              <motion.div 
-                className="bg-gradient-primary"
-                initial={{ width: 0 }}
-                animate={{ 
-                  width: `${userScore + opponentScore > 0 
-                    ? (userScore / (userScore + opponentScore)) * 100 
-                    : 50}%` 
-                }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-              />
-              <motion.div 
-                className="bg-loss/60"
-                initial={{ width: 0 }}
-                animate={{ 
-                  width: `${userScore + opponentScore > 0 
-                    ? (opponentScore / (userScore + opponentScore)) * 100 
-                    : 50}%` 
-                }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-              />
-            </div>
-            <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
-              <span>You: {userScore} pts</span>
-              <span>{opponentParticipant.display_name}: {opponentScore} pts</span>
-            </div>
+        <section className="rounded-xl border border-border bg-card/70 p-4">
+          <div className="flex items-center gap-2"><History className="w-4 h-4 text-secondary" /><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Rivalry</p></div>
+          <div className="flex items-end justify-between gap-3 mt-2">
+            <div><p className="font-display font-bold text-base">{rivalryHeadline}</p><p className="text-xs text-muted-foreground mt-1">{rivalry && rivalry.games > 0 ? `${rivalry.games} previous game${rivalry.games === 1 ? '' : 's'} · avg series margin ${averageMargin.toFixed(1)} pts` : `You vs ${opponentParticipant.display_name} starts here.`}</p></div>
+            {rivalry?.streakType && rivalry.streakCount > 1 && <div className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-center"><p className="text-[9px] uppercase text-muted-foreground">Series streak</p><p className="font-bold text-sm">{rivalry.streakCount}{rivalry.streakType}</p></div>}
           </div>
         </section>
+
+        {isFinal && !isTied && (
+          <PunishmentWheelCard matchupId={scheduledMatchup.id} weekId={currentWeek.id} didLose={!isWinning} opponentName={opponentParticipant.display_name} />
+        )}
+
+        {isLiveGame && <div className="grid grid-cols-2 gap-3">
+          <motion.button whileTap={{ scale: 0.98 }} onClick={() => navigate('/tasks')} className="p-4 rounded-xl bg-secondary/10 border border-secondary/20 flex items-center justify-center gap-2"><Zap className="w-5 h-5 text-secondary" /><span className="font-semibold text-sm">Choose 2× Task</span></motion.button>
+          <motion.button whileTap={{ scale: 0.98 }} onClick={() => setTauntOpen(true)} className="p-4 rounded-xl bg-muted flex items-center justify-center gap-2"><MessageCircle className="w-5 h-5 text-secondary" /><span className="font-semibold text-sm">Send Taunt</span></motion.button>
+        </div>}
+
+        {canShowGameData && <Tabs defaultValue="activity" className="w-full"><TabsList className="grid w-full grid-cols-2 mb-3"><TabsTrigger value="activity" className="flex items-center gap-1.5"><Activity className="w-4 h-4" /><span>{isFinal ? 'Game Activity' : 'Live Activity'}</span>{activityEvents && activityEvents.length > 0 && <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full ml-1">{activityEvents.length}</span>}</TabsTrigger><TabsTrigger value="tasks" className="flex items-center gap-1.5"><ListChecks className="w-4 h-4" /><span>Task Battle</span></TabsTrigger></TabsList><TabsContent value="activity" className="mt-0"><div className="card-elevated rounded-xl p-3"><ActivityFeed events={activityEvents || []} currentUserId={authUser?.id} onScrollPositionChange={setIsAtTop} isLoading={activityLoading} /></div></TabsContent><TabsContent value="tasks" className="mt-0"><TaskBreakdown tasks={taskBreakdown || []} opponentName={opponentParticipant.display_name} isLoading={tasksLoading} /></TabsContent></Tabs>}
       </main>
+
+      <Dialog open={tauntOpen} onOpenChange={setTauntOpen}><DialogContent className="max-w-sm rounded-2xl"><DialogHeader><DialogTitle>Send a taunt</DialogTitle><DialogDescription>Keep it competitive. {opponentParticipant.display_name} will get an in-app notification.</DialogDescription></DialogHeader><div className="space-y-2">{QUICK_TAUNTS.map((taunt) => <button key={taunt} onClick={() => sendTaunt.mutate(taunt)} disabled={sendTaunt.isPending} className="w-full p-3 rounded-xl bg-muted hover:bg-secondary/15 text-left text-sm transition-colors">{taunt}</button>)}</div><div className="space-y-2 pt-2"><Textarea value={customTaunt} onChange={(event) => setCustomTaunt(event.target.value.slice(0, 160))} placeholder="Write your own…" rows={3} /><div className="flex items-center justify-between"><span className="text-[10px] text-muted-foreground">{customTaunt.length}/160</span><Button onClick={() => sendTaunt.mutate(customTaunt.trim())} disabled={!customTaunt.trim() || sendTaunt.isPending}>Send</Button></div></div></DialogContent></Dialog>
     </div>
   );
 }
