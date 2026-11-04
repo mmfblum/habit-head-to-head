@@ -28,9 +28,9 @@ select is(
 );
 
 select ok(
-  (select min_members=1 and max_members=1 and invite_code is null
+  (select min_members=1 and max_members=12 and invite_code is not null
    from public.leagues where created_by='11111111-1111-4111-8111-111111111111'),
-  'Solo league has a one-person roster and no invite code'
+  'Solo league allows one-person start and optional invited accountability partners'
 );
 
 insert into public.seasons (league_id,name,season_number,status,start_date,end_date,weeks_count)
